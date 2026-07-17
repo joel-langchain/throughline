@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-news-agent"
+version = "0.1.0"
+description = "A weekly AI-news agent: cluster the week's writing into topics, research each in parallel, synthesise one cited report."
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "deepagents>=0.5.9",
+    "langchain>=1.0.0,<2.0",
+    "langchain-anthropic",
+    "langgraph>=1.0.0,<2.0",
+    "python-dotenv",
+    "tavily-python",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.6",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+lint.select = ["E", "F", "I", "UP"]
+lint.ignore = ["E501", "E402"]
