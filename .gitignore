@@ -5,4 +5,5 @@ __pycache__/
 output/*
 !output/report.md
 post_assets/
+post_history/
 
