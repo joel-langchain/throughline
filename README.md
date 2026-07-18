@@ -1,4 +1,6 @@
-# AI News Agent
+# Throughline
+
+_Find the thread through the week's AI noise._
 
 A weekly AI-news agent. It reads across the week's writing and returns **one
 cited report**: what actually happened, where the market is moving, and what's

@@ -81,8 +81,9 @@ topic_researcher = {
 
 # --- The editor (main agent) -----------------------------------------------
 
-EDITOR_PROMPT = """You are the editor of a weekly AI-news report. Your job is to
-cut through the volume and surface the small part that actually matters.
+EDITOR_PROMPT = """You are the editor of Throughline, a weekly AI-news report.
+Your job is to cut through the volume and surface the small part that actually
+matters — the thread running through the week's noise.
 
 SOURCE STANDARD (set here, upheld everywhere):
 - A claim only counts as fact when an independent, reputable source stands behind
@@ -106,7 +107,7 @@ Work in this order:
    verdict is SKIP (failed source quality or was just a reworded press release).
 5. Synthesise the KEPT topics into ONE report and write it with write_file to
    /output/report.md. Structure:
-     # This Week in AI — <date>
+     # Throughline — This Week in AI · <date>
      _One-paragraph "what actually happened and where the market is moving."_
      ## <Topic>
      <2-4 sentences of synthesis with inline [n] citations>
