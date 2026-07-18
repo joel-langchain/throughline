@@ -13,13 +13,13 @@ Built on the [deepagents](https://pypi.org/project/deepagents/) editor +
 subagent-team pattern:
 
 ```mermaid
-flowchart LR
+flowchart TD
     A[Scan the week's<br/>AI writing] --> B{Editor<br/>clusters emerging topics}
     B --> R1[Researcher<br/>Topic 1]
     B --> R2[Researcher<br/>Topic 2]
     B --> R3[Researcher<br/>Topic 3]
     subgraph G [Two rules every researcher holds to]
-        direction TB
+        direction LR
         Q1[Reputable, independent<br/>sources only]
         Q2[No reworded<br/>press releases]
     end
