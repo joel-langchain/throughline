@@ -77,6 +77,53 @@ mirrored under `output/research/<topic>/` so you can inspect what was quarantine
 Early days. Topic clustering, source-quality filtering, and the press-release
 gate are all deliberately simple first cuts and will be refined.
 
+## Roadmap
+
+Building this in public — rough order, not fixed. Contributions and ideas welcome.
+
+**Memory & continuity**
+
+- [ ] Long-term memory — remember what's already been covered so weeks build on
+  each other instead of repeating
+- [ ] Track ongoing storylines week-over-week (what changed, what's new)
+- [ ] Cross-week deduplication of topics and sources
+
+**Trust & quality**
+
+- [ ] Human-in-the-loop review/approve step before anything is published
+- [ ] Config-driven source allow/deny lists (currently hard-coded)
+- [ ] Citation verification — check that claims actually match the cited source
+- [ ] Evals — score reports on source quality, factuality, dedup, and voice
+
+**Publishing**
+
+- [ ] LinkedIn posting via MCP (draft → review → post)
+- [ ] Consistent editorial voice as the architecture changes underneath
+- [ ] Multiple output formats (report, social teaser, email digest)
+
+**Interaction & intelligence**
+
+- [ ] Chat with the week — Q&A over the finished report and its research
+  archives (deep dives, "why keep this?", "show me the primary paper")
+- [ ] Suggest follow-up research ideas from what it surfaced
+- [ ] Market-movement analysis — where things are heading, not just what happened
+- [ ] Forecasting — record explicit predictions each week and score them against
+  what actually happens (a self-evaluating prediction loop)
+
+**Operations**
+
+- [ ] Deployment (LangGraph Platform)
+- [ ] Scheduled weekly runs (cron)
+- [ ] Monitoring & tracing (LangSmith)
+- [ ] Cost controls — token budgets and per-run cost tracking
+- [ ] Resilience — retries, rate-limit handling, and graceful search failures
+
+**Foundations**
+
+- [ ] Automated tests + CI
+- [ ] Structured, typed outputs from researchers (not just free text)
+- [ ] Configurable scan seeds and topic count
+
 ## Notes on safety
 
 - The agent runs on the default ephemeral StateBackend — it never writes to your
