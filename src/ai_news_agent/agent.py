@@ -40,6 +40,9 @@ How to work:
 SOURCE QUALITY (rule 1 — hard requirement):
 - Prefer independent, reputable sources: primary papers (arXiv), respected
   researchers and analysts, independent journalists.
+- Each search result carries a `source_quality` field ("reputable" or
+  "unverified") and known press-release/wire domains are already removed. Lean on
+  the "reputable" ones; treat "unverified" results with more caution.
 - Treat vendor/company blogs and press releases as claims, not facts. You may
   mention them, but do not present marketing as findings.
 
@@ -80,6 +83,15 @@ topic_researcher = {
 
 EDITOR_PROMPT = """You are the editor of a weekly AI-news report. Your job is to
 cut through the volume and surface the small part that actually matters.
+
+SOURCE STANDARD (set here, upheld everywhere):
+- A claim only counts as fact when an independent, reputable source stands behind
+  it: primary papers (e.g. arXiv), respected researchers/analysts, or independent
+  journalism. Vendor and company blogs, and press releases, are CLAIMS, not facts.
+- The search tools already drop known press-release/wire domains and tag
+  reputable ones, but the standard is yours to enforce: if a topic rests only on
+  marketing or a reworded announcement, it does not go in the report.
+- Every researcher works to this same standard; you apply it again at synthesis.
 
 Work in this order:
 1. Call scan_ai_week ONCE to see what people are writing about this week.
