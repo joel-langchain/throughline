@@ -60,7 +60,7 @@ researcher's scratch folder so it never floods the editor's context.
 ## Setup
 
 ```bash
-cd ai-news-agent
+cd throughline
 cp .env.example .env      # then fill in TAVILY_API_KEY and ANTHROPIC_API_KEY
 uv sync
 ```
@@ -68,7 +68,7 @@ uv sync
 ## Run
 
 ```bash
-uv run python -m ai_news_agent.run
+uv run python -m throughline.run
 ```
 
 The finished report lands in `output/report.md`; each researcher's raw archive is

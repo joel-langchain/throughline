@@ -6,13 +6,13 @@ web-search text. This trusted host code reads files out of state after the run
 and mirrors them into ./output, with a path-traversal guard.
 
 Usage:
-    uv run python -m ai_news_agent.run
+    uv run python -m throughline.run
 """
 
 from datetime import date
 from pathlib import Path
 
-from ai_news_agent.agent import agent
+from throughline.agent import agent
 
 OUT_DIR = Path(__file__).resolve().parents[2] / "output"
 

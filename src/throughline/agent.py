@@ -20,8 +20,8 @@ Two rules the system must hold to:
 
 from deepagents import FilesystemPermission, create_deep_agent
 
-from ai_news_agent.models import model, strong_model
-from ai_news_agent.tools import internet_search, scan_ai_week
+from throughline.models import model, strong_model
+from throughline.tools import internet_search, scan_ai_week
 
 # --- The research subagent -------------------------------------------------
 

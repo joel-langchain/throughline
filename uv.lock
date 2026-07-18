@@ -3,37 +3,6 @@ revision = 3
 requires-python = ">=3.11, <3.14"
 
 [[package]]
-name = "ai-news-agent"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "deepagents" },
-    { name = "langchain" },
-    { name = "langchain-anthropic" },
-    { name = "langgraph" },
-    { name = "python-dotenv" },
-    { name = "tavily-python" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "deepagents", specifier = ">=0.5.9" },
-    { name = "langchain", specifier = ">=1.0.0,<2.0" },
-    { name = "langchain-anthropic" },
-    { name = "langgraph", specifier = ">=1.0.0,<2.0" },
-    { name = "python-dotenv" },
-    { name = "tavily-python" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "ruff", specifier = ">=0.6" }]
-
-[[package]]
 name = "annotated-types"
 version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1015,6 +984,37 @@ sdist = { url = "https://files.pythonhosted.org/packages/47/c6/ee486fd809e357697
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d7/c1/eb8f9debc45d3b7918a32ab756658a0904732f75e555402972246b0b8e71/tenacity-9.1.4-py3-none-any.whl", hash = "sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55", size = 28926, upload-time = "2026-02-07T10:45:32.24Z" },
 ]
+
+[[package]]
+name = "throughline"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "deepagents" },
+    { name = "langchain" },
+    { name = "langchain-anthropic" },
+    { name = "langgraph" },
+    { name = "python-dotenv" },
+    { name = "tavily-python" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "deepagents", specifier = ">=0.5.9" },
+    { name = "langchain", specifier = ">=1.0.0,<2.0" },
+    { name = "langchain-anthropic" },
+    { name = "langgraph", specifier = ">=1.0.0,<2.0" },
+    { name = "python-dotenv" },
+    { name = "tavily-python" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "ruff", specifier = ">=0.6" }]
 
 [[package]]
 name = "tiktoken"
