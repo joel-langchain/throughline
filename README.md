@@ -12,6 +12,25 @@ delegates each topic to a researcher, then synthesises the results.
 Built on the [deepagents](https://pypi.org/project/deepagents/) editor +
 subagent-team pattern:
 
+```mermaid
+flowchart LR
+    A[Scan the week's<br/>AI writing] --> B{Editor<br/>clusters emerging topics}
+    B --> R1[Researcher<br/>Topic 1]
+    B --> R2[Researcher<br/>Topic 2]
+    B --> R3[Researcher<br/>Topic 3]
+    subgraph G [Two rules every researcher holds to]
+        direction TB
+        Q1[Reputable, independent<br/>sources only]
+        Q2[No reworded<br/>press releases]
+    end
+    R1 -.-> G
+    R2 -.-> G
+    R3 -.-> G
+    R1 --> S[Editor drops SKIPs, then<br/>synthesises ONE cited report]
+    R2 --> S
+    R3 --> S
+```
+
 ```
 editor (strong model)
   │  scan_ai_week() once → cluster the week into topics that emerge from the data
