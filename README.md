@@ -16,7 +16,8 @@ subagent-team pattern:
 
 ```mermaid
 flowchart TD
-    A[Scan the week's<br/>AI writing] --> B{Editor<br/>clusters emerging topics}
+    MEM[(Cross-week memory<br/>coverage ledger)] --> B
+    A[Scan the week's<br/>AI writing] --> B{Editor clusters topics,<br/>tags NEW vs DEVELOPING,<br/>drops pure repeats}
     B --> R1[Researcher<br/>Topic 1]
     B --> R2[Researcher<br/>Topic 2]
     B --> R3[Researcher<br/>Topic 3]
@@ -31,19 +32,25 @@ flowchart TD
     R1 --> S[Editor drops SKIPs, then<br/>synthesises ONE cited report]
     R2 --> S
     R3 --> S
+    S --> O[report.md +<br/>dated copy in output/reports/]
+    S --> U[(Update memory<br/>for next week)]
+    U -.->|next week| MEM
 ```
 
 ```
 editor (strong model)
+  │  read /memories/coverage.md → recall what past weeks already covered
   │  scan_ai_week() once → cluster the week into topics that emerge from the data
-  │  delegate each topic in parallel via the task tool
+  │  tag each topic NEW or DEVELOPING, drop pure repeats (cross-week dedup)
+  │  delegate each kept topic in parallel via the task tool
   ├──► topic-researcher (cheap model, own tools + scoped scratch disk)
   │       search reputable sources, quarantine raw hits to
   │       /research/<topic>/sources.md, return one cited summary + KEEP/SKIP
   │       verdict
   └──► ... one researcher per topic ...
   collect summaries → drop the SKIPs (quality gate) → synthesise ONE cited
-  report → /output/report.md
+  report → /output/report.md (+ a dated copy in /output/reports/)
+  update /memories/ (coverage.md + this-week.json) so next week builds on this one
 ```
 
 Why multi-agent: topics are independent, so researchers run **in parallel**, each
