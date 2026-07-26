@@ -24,6 +24,9 @@ from throughline.agent import agent
 ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "output"
 MEM_DIR = ROOT / "memory"
+# Dated, append-only archive of each week's report (the latest also stays at
+# output/report.md for convenience). Past weeks are kept, never overwritten.
+REPORTS_DIR = OUT_DIR / "reports"
 
 # Agent-side path prefix for persistent cross-week memory (deepagents convention).
 MEM_PREFIX = "/memories/"
@@ -147,6 +150,7 @@ def main() -> None:
     files = result.get("files", {})
     if "/output/report.md" not in files:
         raise SystemExit("Agent did not write /output/report.md — check the run above.")
+    report_body = _content(files["/output/report.md"])
 
     out_root = OUT_DIR.resolve()
     mem_root = MEM_DIR.resolve()
@@ -161,7 +165,15 @@ def main() -> None:
             rel = path[len("/output/"):] if path.startswith("/output/") else path.lstrip("/")
             _mirror_file(path, body, OUT_DIR, out_root, rel)
 
+    # Keep a dated copy so the weeks accumulate into a browsable archive rather
+    # than each run overwriting the last.
+    REPORTS_DIR.mkdir(exist_ok=True)
+    archived = REPORTS_DIR / f"{date.today():%Y-%m-%d}.md"
+    archived.write_text(report_body, encoding="utf-8")
+    print(f"  archived  ->  output/{archived.relative_to(OUT_DIR)}  ({len(report_body):,} chars)")
+
     print(f"\nRead this week's report: {OUT_DIR / 'report.md'}")
+    print(f"Browse past weeks:       {REPORTS_DIR}")
 
 
 if __name__ == "__main__":

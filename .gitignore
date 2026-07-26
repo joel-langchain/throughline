@@ -4,6 +4,8 @@ __pycache__/
 *.egg-info/
 output/*
 !output/report.md
+!output/reports/
+!output/reports/*.md
 memory/*
 !memory/coverage.example.md
 post_assets/

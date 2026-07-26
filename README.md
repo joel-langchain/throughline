@@ -71,8 +71,10 @@ uv sync
 uv run python -m throughline.run
 ```
 
-The finished report lands in `output/report.md`; each researcher's raw archive is
-mirrored under `output/research/<topic>/` so you can inspect what was quarantined.
+The finished report lands in `output/report.md`, and a dated copy is kept in
+`output/reports/<YYYY-MM-DD>.md` so past weeks accumulate instead of being
+overwritten. Each researcher's raw archive is mirrored under
+`output/research/<topic>/` so you can inspect what was quarantined.
 What the agent remembers between weeks lives in `memory/` (see below).
 
 ## Memory & continuity
@@ -105,6 +107,9 @@ deliberately simple first cut and will be refined.
   before it clusters, tags each topic **NEW** or **DEVELOPING**, drops pure
   repeats, and leads developing storylines with what changed. Weeks now build on
   each other. _(memory lives under `/memories/`; see [Memory & continuity](#memory--continuity))_
+- **Weekly report archive** — every run keeps a dated copy under
+  `output/reports/<YYYY-MM-DD>.md`, so the reports accumulate into a browsable
+  record rather than each week overwriting the last.
 - **Source legitimacy enforcement** — known press-release / wire domains are
   dropped before a researcher ever sees them, reputable domains are tagged, and
   the quality rubric is enforced at both the researcher and the editor.
