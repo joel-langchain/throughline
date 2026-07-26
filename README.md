@@ -73,11 +73,44 @@ uv run python -m throughline.run
 
 The finished report lands in `output/report.md`; each researcher's raw archive is
 mirrored under `output/research/<topic>/` so you can inspect what was quarantined.
+What the agent remembers between weeks lives in `memory/` (see below).
 
-## Status
+## Memory & continuity
 
-Early days. Topic clustering, source-quality filtering, and the press-release
-gate are all deliberately simple first cuts and will be refined.
+Throughline remembers what it has already covered, so the weeks build on each
+other instead of repeating. Before each run the editor reads a running coverage
+ledger; when it clusters the week it tags every topic **NEW** or **DEVELOPING**,
+drops pure repeats, and for a developing storyline leads with *what actually
+changed* since last time. After the run it updates its own memory for next week.
+
+Memory is just files under the agent path `/memories/` (the deepagents
+convention):
+
+- `memory/coverage.md` — the running ledger, one line per topic per week.
+- `memory/this-week.json` — a structured record of the latest week.
+
+Right now the runner persists these by mirroring `/memories/` to the local
+`memory/` folder either side of a run — deliberately simple. When the agent is
+deployed (see the roadmap), that same `/memories/` path swaps to a persistent
+`StoreBackend` and the local mirror goes away, with **no change** to the agent
+itself.
+
+## Shipped so far
+
+Building in public, newest first. Ticked items in the roadmap below are done;
+the core that predates the roadmap is captured here too. Everything is a
+deliberately simple first cut and will be refined.
+
+- **Cross-week memory & continuity** — the editor reads a running coverage ledger
+  before it clusters, tags each topic **NEW** or **DEVELOPING**, drops pure
+  repeats, and leads developing storylines with what changed. Weeks now build on
+  each other. _(memory lives under `/memories/`; see [Memory & continuity](#memory--continuity))_
+- **Source legitimacy enforcement** — known press-release / wire domains are
+  dropped before a researcher ever sees them, reputable domains are tagged, and
+  the quality rubric is enforced at both the researcher and the editor.
+- **Core system** — an editor clusters the week's writing into emerging topics and
+  delegates each to a parallel researcher team, then synthesises one cited report.
+  Researchers run in isolated contexts with raw search text quarantined per topic.
 
 ## Roadmap
 
@@ -85,10 +118,11 @@ Building this in public — rough order, not fixed. Contributions and ideas welc
 
 **Memory & continuity**
 
-- [ ] Long-term memory — remember what's already been covered so weeks build on
+- [x] Long-term memory — remember what's already been covered so weeks build on
   each other instead of repeating
-- [ ] Track ongoing storylines week-over-week (what changed, what's new)
-- [ ] Cross-week deduplication of topics and sources
+- [x] Track ongoing storylines week-over-week (what changed, what's new)
+- [x] Cross-week deduplication of topics _(topic-level, editor judgement for now;
+  source-level dedup still to come)_
 
 **Trust & quality**
 
@@ -114,7 +148,7 @@ Building this in public — rough order, not fixed. Contributions and ideas welc
 
 **Operations**
 
-- [ ] Deployment (LangGraph Platform)
+- [ ] Deployment (LangSmith Deployment)
 - [ ] Scheduled weekly runs (cron)
 - [ ] Monitoring & tracing (LangSmith)
 - [ ] Cost controls — token budgets and per-run cost tracking
