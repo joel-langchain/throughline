@@ -3,19 +3,27 @@
 Architecture (deepagents editor + subagent team):
 
     editor (strong model)
-      │  scan_ai_week() once -> cluster the week into topics
-      │  delegate each topic in parallel via the task tool
+      │  read /memories/coverage.md → know what past weeks already covered
+      │  scan_ai_week() once → cluster the week into topics
+      │  tag each NEW vs DEVELOPING, drop pure repeats (cross-week dedup)
+      │  delegate each kept topic in parallel via the task tool
       ├──► topic-researcher (cheap model, own tools + scoped disk)
       │       search reputable sources, quarantine raw hits to
       │       /research/<topic>/sources.md, return one cited summary
       │       + a press-release verdict
       └──► ... one researcher per topic ...
       collect summaries, drop the ones that fail the quality gate,
-      synthesise ONE report with citations -> /output/report.md
+      synthesise ONE report with citations → /output/report.md, then
+      update memory (/memories/coverage.md + /memories/this-week.json) so
+      next week builds on this one.
 
 Two rules the system must hold to:
   1. Only reputable, independent sources (researchers/analysts, not vendor blogs).
   2. If a summary is just a reworded press release, it does not go out.
+
+Cross-week memory lives under /memories/ (the deepagents convention). Today it is
+persisted by the runner mirroring /memories/ to ./memory; on deployment that path
+swaps to a persistent StoreBackend with no change to this agent.
 """
 
 from deepagents import FilesystemPermission, create_deep_agent
@@ -95,31 +103,60 @@ SOURCE STANDARD (set here, upheld everywhere):
 - Every researcher works to this same standard; you apply it again at synthesis.
 
 Work in this order:
-1. Call scan_ai_week ONCE to see what people are writing about this week.
+1. Read /memories/coverage.md FIRST. This is your memory of what Throughline has
+   already covered in previous weeks. Use it so the weeks build on each other
+   instead of repeating. (If it says there is no prior coverage, treat this as
+   the first week and everything is NEW.)
+2. Call scan_ai_week ONCE to see what people are writing about this week.
    (Call it a second time with an `extra_query` only if the picture is thin.)
-2. CLUSTER what you see into 4-6 topics that EMERGE from the writing — the
+3. CLUSTER what you see into 4-6 topics that EMERGE from the writing — the
    themes people are actually discussing, not a fixed list you decided in
-   advance. Give each a short, specific name.
-3. For EACH topic, delegate to the topic-researcher subagent using the task
-   tool — fire them off IN PARALLEL. Tell each one its topic and its assigned
-   folder (/research/<topic>/). Do NOT research topics yourself.
-4. Collect the returned summaries. Apply the QUALITY GATE: drop any topic whose
+   advance. Give each a short, specific name. Then, using your memory from step
+   1, tag each topic:
+     - NEW — not meaningfully covered before.
+     - DEVELOPING — a storyline you have covered before. Keep it ONLY if there is
+       a genuine update this week; note in one line WHAT CHANGED since last time.
+   DEDUPLICATE: if a topic is just a restatement of something already covered
+   with nothing new, drop it — that is exactly the repetition memory exists to
+   prevent.
+4. For EACH topic you are keeping, delegate to the topic-researcher subagent
+   using the task tool — fire them off IN PARALLEL. Tell each one its topic and
+   its assigned folder (/research/<topic>/). Do NOT research topics yourself.
+5. Collect the returned summaries. Apply the QUALITY GATE: drop any topic whose
    verdict is SKIP (failed source quality or was just a reworded press release).
-5. Synthesise the KEPT topics into ONE report and write it with write_file to
+6. Synthesise the KEPT topics into ONE report and write it with write_file to
    /output/report.md. Structure:
      # Throughline — This Week in AI · <date>
-     _One-paragraph "what actually happened and where the market is moving."_
-     ## <Topic>
-     <2-4 sentences of synthesis with inline [n] citations>
+     _One-paragraph "what actually happened and where the market is moving."
+     Open this with a short "Since last week:" clause when there are DEVELOPING
+     storylines, so the reader feels the continuity._
+     ## <Topic>  <add "(developing)" to the heading for DEVELOPING storylines>
+     <2-4 sentences of synthesis with inline [n] citations; for a developing
+     story, lead with what actually changed since last week>
      ...
      ## Sources
      <numbered list of every cited source across topics>
-6. End your reply with a SHORT plain-text teaser (2-3 sentences) suitable for a
-   social post, plus a note of how many topics you kept vs dropped and why.
+7. UPDATE YOUR MEMORY so next week can build on this one. Write TWO files:
+   a) /memories/coverage.md — the running ledger. Keep the prior entries, then
+      append a section for this week:
+        ## Week of <date>
+        - <Topic> [NEW|DEVELOPING] — <one-line synopsis of what happened>
+        ...
+      Keep it compact (one line per topic). If it is getting long, you may drop
+      entries older than ~8 weeks.
+   b) /memories/this-week.json — a structured record of this week only, exactly:
+      {"week": "<date>", "topics": [
+        {"topic": "<name>", "status": "NEW|DEVELOPING",
+         "synopsis": "<one line>", "sources": ["<url>", ...]}, ...]}
+8. End your reply with a SHORT plain-text teaser (2-3 sentences) suitable for a
+   social post, plus a note of how many topics you kept vs dropped, how many were
+   NEW vs DEVELOPING, and why.
 
 Keep your own context on coordination and synthesis, not raw search text."""
 
 editor_permissions = [
+    # The editor curates persistent memory; researchers must not touch it.
+    FilesystemPermission(operations=["read", "write"], paths=["/memories/**"], mode="allow"),
     FilesystemPermission(operations=["write"], paths=["/research/**"], mode="deny"),
 ]
 
