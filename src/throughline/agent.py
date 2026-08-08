@@ -31,6 +31,8 @@ swaps to a persistent StoreBackend with no change to this agent.
 """
 
 from deepagents import FilesystemPermission, create_deep_agent
+from langchain.agents.middleware import InterruptOnConfig
+from langchain.agents.middleware.types import ToolCallRequest
 
 from throughline.config import MAX_VERIFY_RETRIES
 from throughline.models import model, strong_model
@@ -242,10 +244,58 @@ editor_permissions = [
     FilesystemPermission(operations=["write"], paths=["/research/**"], mode="deny"),
 ]
 
-agent = create_deep_agent(
-    model=strong_model,
-    tools=[scan_ai_week],
-    system_prompt=EDITOR_PROMPT,
-    subagents=[topic_researcher, citation_verifier],
-    permissions=editor_permissions,
-)
+
+# --- Human review before the report is finalised ---------------------------
+
+# The report is written with the built-in write_file tool. Only the single write
+# to this path is the finished report; every other write_file call (researchers'
+# sources, memory files) must run untouched, so the review interrupt is scoped to
+# exactly this path via the `when` predicate below.
+REPORT_PATH = "/output/report.md"
+
+
+def _is_report_write(request: ToolCallRequest) -> bool:
+    """True only when the model is writing the finished report to REPORT_PATH.
+
+    Used as the `when` predicate on the review interrupt so the human is asked to
+    approve only the report itself, not the many other file writes in a run.
+    """
+    tool_call = request.tool_call
+    if tool_call.get("name") != "write_file":
+        return False
+    return tool_call.get("args", {}).get("file_path") == REPORT_PATH
+
+
+# Pause the run to let a human approve, edit, or reject the report before it is
+# finalised. Requires a checkpointer at build time (see build_agent) so the graph
+# can pause and resume.
+report_review = {
+    "write_file": InterruptOnConfig(
+        allowed_decisions=["approve", "edit", "reject"],
+        when=_is_report_write,
+        description="Review this week's Throughline report before it is finalised.",
+    )
+}
+
+
+def build_agent(checkpointer=None):
+    """Build the editor agent.
+
+    The human-review interrupt needs a checkpointer to pause and resume, so the
+    runner supplies an in-memory one for local runs. The module-level ``agent``
+    below is built WITHOUT a checkpointer to stay deployment-safe (the platform
+    injects its own persistence); pass a checkpointer only for local,
+    interruptible runs.
+    """
+    return create_deep_agent(
+        model=strong_model,
+        tools=[scan_ai_week],
+        system_prompt=EDITOR_PROMPT,
+        subagents=[topic_researcher, citation_verifier],
+        permissions=editor_permissions,
+        interrupt_on=report_review,
+        checkpointer=checkpointer,
+    )
+
+
+agent = build_agent()

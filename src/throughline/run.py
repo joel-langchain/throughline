@@ -16,10 +16,14 @@ Usage:
     uv run python -m throughline.run
 """
 
+import uuid
 from datetime import date
 from pathlib import Path
 
-from throughline.agent import agent
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import Command
+
+from throughline.agent import build_agent
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "output"
@@ -113,33 +117,103 @@ def _print_progress(update: dict) -> None:
                     print(line, flush=True)
 
 
+def _pending_review(agent, config) -> dict | None:
+    """Return the pending human-review request if the run is paused, else None.
+
+    When the report-review interrupt fires, the graph pauses and the HITLRequest
+    payload (action_requests + review_configs) is stored on the paused task.
+    """
+    state = agent.get_state(config)
+    if not state.next:
+        return None
+    for task in state.tasks:
+        for intr in task.interrupts or ():
+            return intr.value
+    return None
+
+
+def _review_report(request: dict) -> dict:
+    """Show the drafted report and collect a human decision.
+
+    Returns a HumanInTheLoopMiddleware decision dict: approve, edit (supply a file
+    path with the revised report), or reject.
+    """
+    action = request["action_requests"][0]
+    args = action.get("args", {})
+    content = args.get("content") or "(no content in the write call)"
+
+    print("\n" + "=" * 60)
+    print("HUMAN REVIEW — draft report before it is finalised:\n")
+    print(content)
+    print("=" * 60)
+    print("Decision: [a]pprove  /  [e]dit (supply a file path)  /  [r]eject")
+    choice = input("> ").strip().lower()
+
+    if choice.startswith("r"):
+        return {
+            "type": "reject",
+            "message": "Report rejected by human reviewer; nothing was published.",
+        }
+    if choice.startswith("e"):
+        path = input("Path to a markdown file with the edited report: ").strip()
+        edited = Path(path).expanduser().read_text(encoding="utf-8")
+        return {
+            "type": "edit",
+            "edited_action": {"name": action["name"], "args": {**args, "content": edited}},
+        }
+    return {"type": "approve"}
+
+
 def main() -> None:
     OUT_DIR.mkdir(exist_ok=True)
     MEM_DIR.mkdir(exist_ok=True)
     prompt = f"Build this week's AI-news report. Today is {date.today():%Y-%m-%d}."
+
+    # A checkpointer + thread_id let the report-review interrupt pause and resume.
+    agent = build_agent(checkpointer=MemorySaver())
+    config = {"configurable": {"thread_id": uuid.uuid4().hex}, "recursion_limit": 100}
 
     print("Throughline — building this week's report. Live progress:\n", flush=True)
 
     # Stream so the run narrates itself instead of sitting silent. "updates" drives
     # the progress lines; "values" carries the full state, whose last root emission
     # is the finished run we mirror to disk. subgraphs=True lets the parallel
-    # researchers' searches surface too.
+    # researchers' searches surface too. The run may pause for human review of the
+    # report, so wrap the stream in a resume loop.
+    stream_input: object = {
+        "messages": [{"role": "user", "content": prompt}],
+        # Seed prior weeks so the editor can dedup and track storylines.
+        "files": _load_memory(),
+    }
     final_state: dict = {}
-    for namespace, mode, chunk in agent.stream(
-        {
-            "messages": [{"role": "user", "content": prompt}],
-            # Seed prior weeks so the editor can dedup and track storylines.
-            "files": _load_memory(),
-        },
-        config={"recursion_limit": 100},
-        stream_mode=["updates", "values"],
-        subgraphs=True,
-    ):
-        if mode == "values":
-            if not namespace:  # only the root graph holds the final, complete state
-                final_state = chunk
-        else:
-            _print_progress(chunk)
+    rejected = False
+
+    while True:
+        for namespace, mode, chunk in agent.stream(
+            stream_input,
+            config=config,
+            stream_mode=["updates", "values"],
+            subgraphs=True,
+        ):
+            if mode == "values":
+                if not namespace:  # only the root graph holds the final, complete state
+                    final_state = chunk
+            else:
+                _print_progress(chunk)
+
+        request = _pending_review(agent, config)
+        if request is None:
+            break  # the run finished (no pending interrupt)
+        decision = _review_report(request)
+        if decision["type"] == "reject":
+            rejected = True
+        # Resume the paused run with the human's decision.
+        stream_input = Command(resume={"decisions": [decision]})
+
+    if rejected:
+        print("\n" + "=" * 60)
+        print("Report rejected — nothing written to disk, memory left unchanged.")
+        return
 
     result = final_state
 
