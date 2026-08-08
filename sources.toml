@@ -5,6 +5,11 @@
 # trust model can be tuned without touching code (was previously hard-coded in
 # src/throughline/tools.py). Edit freely — one domain per line, no leading "www.".
 
+# max_verify_retries: how many times the editor may send a researcher back to
+# close unsupported-citation gaps before giving up and dropping the claims. A
+# hard cap on the verify -> re-research -> re-verify loop.
+max_verify_retries = 2
+
 # deny: press-release / wire domains. Almost always reworded marketing, so they
 # are dropped before any researcher sees them. Subdomains are covered too.
 deny = [

@@ -14,7 +14,9 @@ Architecture (deepagents editor + subagent team):
       └──► ... one researcher per topic ...
       collect summaries, drop the ones that fail the quality gate,
       then check each kept topic's citations against its quarantined sources
-      via a citation-verifier subagent, dropping/correcting unsupported claims,
+      via a citation-verifier subagent; on a FLAG, re-dispatch the researcher to
+      close the gap and re-verify (bounded retry — loop 2), dropping/correcting
+      any claims that still cannot be supported,
       synthesise ONE report with citations → /output/report.md, then
       update memory (/memories/coverage.md + /memories/this-week.json) so
       next week builds on this one.
@@ -30,6 +32,7 @@ swaps to a persistent StoreBackend with no change to this agent.
 
 from deepagents import FilesystemPermission, create_deep_agent
 
+from throughline.config import MAX_VERIFY_RETRIES
 from throughline.models import model, strong_model
 from throughline.tools import internet_search, scan_ai_week
 
@@ -46,6 +49,16 @@ How to work:
    tool returned them — every title, URL, and content snippet. Do NOT summarise
    or trim. This raw archive stays here so it never clutters the editor.
 3. Only then write your summary from what you found.
+
+FOLLOW-UP REQUESTS (a gap-closing re-dispatch):
+- If your task says specific claims were UNSUPPORTED in a previous pass, this is a
+  second look. FIRST read your existing /research/<topic>/sources.md, THEN run
+  additional searches aimed squarely at those flagged claims, THEN write the
+  COMBINED old + new results back to /research/<topic>/sources.md (keep the prior
+  sources, add the new ones — do not lose what was already there).
+- Return an updated summary that keeps ONLY claims your sources actually support;
+  correct or drop the ones you could not substantiate. Do not restate a claim you
+  still cannot back.
 
 SOURCE QUALITY (rule 1 — hard requirement):
 - Prefer independent, reputable sources: primary papers (arXiv), respected
@@ -172,13 +185,22 @@ Work in this order:
    its assigned folder (/research/<topic>/). Do NOT research topics yourself.
 5. Collect the returned summaries. Apply the QUALITY GATE: drop any topic whose
    verdict is SKIP (failed source quality or was just a reworded press release).
-6. VERIFY CITATIONS. For EACH kept topic, delegate to the citation-verifier
-   subagent using the task tool. Give it the topic, its research folder
-   (/research/<topic>/), and the researcher's summary. The verifier reads only
-   the quarantined sources and returns PASS or FLAG with a list of unsupported
-   claims. For any FLAG: remove or correct the unsupported claims using ONLY the
-   cited sources before synthesis. If a topic's substance depends on claims that
-   cannot be supported, drop the topic. Never invent support to save a claim.
+6. VERIFY CITATIONS (the verification loop). For EACH kept topic:
+   a) Delegate to the citation-verifier subagent via the task tool. Give it the
+      topic, its research folder (/research/<topic>/), and the researcher's
+      summary. It reads ONLY the quarantined sources and returns PASS or FLAG
+      with the unsupported claims.
+   b) If PASS, keep the topic as researched.
+   c) If FLAG, GO AGAIN: re-dispatch the SAME topic to the topic-researcher via
+      the task tool, telling it EXACTLY which claims were unsupported and to find
+      independent support for them (or correct/remove them). Then re-verify the
+      updated summary by repeating step (a).
+   d) STOP CONDITION: run this re-research + re-verify loop AT MOST
+      <<MAX_VERIFY_RETRIES>> time(s) per topic. This cap is a HARD limit, not the
+      verifier's or your own judgement — do not exceed it however tempting. If a
+      topic still FLAGs after the final allowed attempt, drop the unsupported
+      claims (or the whole topic if its substance depends on them), keeping ONLY
+      what the sources support. Never invent support to save a claim.
 7. Synthesise the KEPT topics into ONE report and write it with write_file to
    /output/report.md. Structure:
      # Throughline — This Week in AI · <date>
@@ -208,6 +230,11 @@ Work in this order:
    NEW vs DEVELOPING, how many had citations flagged by the verifier, and why.
 
 Keep your own context on coordination and synthesis, not raw search text."""
+
+# The retry cap is enforced as a hard number injected from config, not left to
+# the model to decide — the stop condition for loop 2 lives outside the agent's
+# own judgement.
+EDITOR_PROMPT = EDITOR_PROMPT.replace("<<MAX_VERIFY_RETRIES>>", str(MAX_VERIFY_RETRIES))
 
 editor_permissions = [
     # The editor curates persistent memory; researchers must not touch it.

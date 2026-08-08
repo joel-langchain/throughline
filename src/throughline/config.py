@@ -32,3 +32,8 @@ PRESS_RELEASE_DOMAINS = frozenset(_cfg.get("deny", []))
 REPUTABLE_DOMAINS = frozenset(_cfg.get("allow", []))
 # Broad discovery seeds for scan_ai_week.
 SCAN_SEEDS = list(_cfg.get("scan_seeds", []))
+
+# Verification loop: how many times the editor may re-dispatch a researcher to
+# close unsupported-citation gaps before it must give up and drop the claims.
+# A hard cap on the verify -> re-research -> re-verify loop (bounds loop 2).
+MAX_VERIFY_RETRIES = int(_cfg.get("max_verify_retries", 2))
