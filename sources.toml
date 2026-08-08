@@ -45,6 +45,33 @@ allow = [
   "semianalysis.com",
   "nature.com",
   "science.org",
+  # Reputable general / business / policy news
+  "bbc.com",
+  "bbc.co.uk",
+  "npr.org",
+  "cnn.com",
+  "axios.com",
+  "politico.com",
+  "cnbc.com",
+  "fortune.com",
+  "time.com",
+  "theatlantic.com",
+  "aljazeera.com",
+  "scmp.com",
+  "csmonitor.com",
+  # Academic / research institutions & think tanks
+  "stanford.edu",
+  "mit.edu",
+  "berkeley.edu",
+  "brookings.edu",
+  "rand.org",
+  # Government / official primary sources
+  "nsf.gov",
+  "nih.gov",
+  "nist.gov",
+  "whitehouse.gov",
+  "gov.uk",
+  "europa.eu",
 ]
 
 # scan_seeds: broad, deliberately generic queries used only for discovery and
