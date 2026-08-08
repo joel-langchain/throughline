@@ -11,6 +11,16 @@ from urllib.parse import urlparse
 from langchain_core.tools import tool
 from tavily import TavilyClient
 
+from throughline.config import (
+    PRESS_RELEASE_DOMAINS as _PRESS_RELEASE_DOMAINS,
+)
+from throughline.config import (
+    REPUTABLE_DOMAINS as _REPUTABLE_DOMAINS,
+)
+from throughline.config import (
+    SCAN_SEEDS as _SCAN_SEEDS,
+)
+
 _api_key = os.environ.get("TAVILY_API_KEY")
 if not _api_key:
     raise RuntimeError(
@@ -19,44 +29,12 @@ if not _api_key:
 
 _tavily = TavilyClient(api_key=_api_key)
 
-# Legitimacy is enforced here, in code, not left to the model's judgement.
-#
-# Press-release / wire domains are almost always reworded marketing. We drop
-# them outright so they never reach a researcher. Reputable domains are tagged
-# so the model gets a deterministic signal instead of guessing. Everything else
-# passes through as "unverified" for the researcher to weigh.
-_PRESS_RELEASE_DOMAINS = frozenset({
-    "prnewswire.com",
-    "businesswire.com",
-    "globenewswire.com",
-    "prweb.com",
-    "newswire.com",
-    "einpresswire.com",
-    "einnews.com",
-    "accesswire.com",
-    "prlog.org",
-})
-
-_REPUTABLE_DOMAINS = frozenset({
-    "arxiv.org",
-    "reuters.com",
-    "apnews.com",
-    "bloomberg.com",
-    "ft.com",
-    "wsj.com",
-    "nytimes.com",
-    "washingtonpost.com",
-    "theguardian.com",
-    "economist.com",
-    "theverge.com",
-    "techcrunch.com",
-    "wired.com",
-    "arstechnica.com",
-    "theinformation.com",
-    "semianalysis.com",
-    "nature.com",
-    "science.org",
-})
+# Legitimacy is enforced deterministically, not left to the model's judgement.
+# The trust lists (deny/allow domains) and discovery seeds now live in
+# sources.toml and are loaded via throughline.config, so they can be tuned
+# without editing code. Press-release / wire domains are dropped outright so they
+# never reach a researcher; reputable domains are tagged so the model gets a
+# deterministic signal; everything else passes through as "unverified".
 
 
 def _domain(url: str) -> str:
@@ -72,18 +50,6 @@ def _domain_in(url: str, domains: frozenset[str]) -> bool:
     """True if the URL's host is one of `domains` (or a subdomain of one)."""
     host = _domain(url)
     return any(host == d or host.endswith("." + d) for d in domains)
-
-# Broad seeds used only for discovery/clustering. These are deliberately generic
-# so the topics come from the conversation, not a fixed editorial list.
-_SCAN_SEEDS = [
-    "artificial intelligence",
-    "large language models",
-    "AI model release",
-    "AI research paper",
-    "AI agents",
-    "AI policy regulation",
-    "AI infrastructure compute",
-]
 
 
 @tool

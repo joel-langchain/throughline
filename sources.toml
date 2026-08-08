@@ -1,0 +1,56 @@
+# Source legitimacy config for Throughline.
+#
+# These lists decide which domains are trusted, which are blocked outright, and
+# which broad seeds drive weekly discovery. They live here, in config, so the
+# trust model can be tuned without touching code (was previously hard-coded in
+# src/throughline/tools.py). Edit freely — one domain per line, no leading "www.".
+
+# deny: press-release / wire domains. Almost always reworded marketing, so they
+# are dropped before any researcher sees them. Subdomains are covered too.
+deny = [
+  "prnewswire.com",
+  "businesswire.com",
+  "globenewswire.com",
+  "prweb.com",
+  "newswire.com",
+  "einpresswire.com",
+  "einnews.com",
+  "accesswire.com",
+  "prlog.org",
+]
+
+# allow: reputable, independent sources. Tagged "[reputable]" so the model gets a
+# deterministic quality signal instead of guessing. Subdomains are covered too.
+allow = [
+  "arxiv.org",
+  "reuters.com",
+  "apnews.com",
+  "bloomberg.com",
+  "ft.com",
+  "wsj.com",
+  "nytimes.com",
+  "washingtonpost.com",
+  "theguardian.com",
+  "economist.com",
+  "theverge.com",
+  "techcrunch.com",
+  "wired.com",
+  "arstechnica.com",
+  "theinformation.com",
+  "semianalysis.com",
+  "nature.com",
+  "science.org",
+]
+
+# scan_seeds: broad, deliberately generic queries used only for discovery and
+# clustering. Kept generic so topics emerge from the week's writing, not a fixed
+# editorial list.
+scan_seeds = [
+  "artificial intelligence",
+  "large language models",
+  "AI model release",
+  "AI research paper",
+  "AI agents",
+  "AI policy regulation",
+  "AI infrastructure compute",
+]
