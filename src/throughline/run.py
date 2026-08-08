@@ -16,6 +16,7 @@ Usage:
     uv run python -m throughline.run
 """
 
+import os
 import uuid
 from datetime import date
 from pathlib import Path
@@ -34,6 +35,9 @@ REPORTS_DIR = OUT_DIR / "reports"
 
 # Agent-side path prefix for persistent cross-week memory (deepagents convention).
 MEM_PREFIX = "/memories/"
+
+# Default LangSmith project for this app's traces (overridable via env).
+TRACING_PROJECT = "throughline"
 
 _STUB_COVERAGE = """# Throughline coverage ledger
 
@@ -117,6 +121,24 @@ def _print_progress(update: dict) -> None:
                     print(line, flush=True)
 
 
+def _configure_tracing() -> str:
+    """Turn on LangSmith tracing when an API key is present, and name the project.
+
+    Tracing for a LangGraph app is automatic once the env vars are set, so this
+    only fills in sensible defaults: if a LANGSMITH_API_KEY is available it
+    enables tracing (unless explicitly disabled) and routes traces to the
+    ``throughline`` project. No key -> the run proceeds untraced. Returns a
+    one-line status for the console.
+    """
+    if not os.getenv("LANGSMITH_API_KEY"):
+        return "Tracing: off (set LANGSMITH_API_KEY in .env to trace to LangSmith)"
+    os.environ.setdefault("LANGSMITH_TRACING", "true")
+    os.environ.setdefault("LANGSMITH_PROJECT", TRACING_PROJECT)
+    if os.getenv("LANGSMITH_TRACING", "").lower() not in ("true", "1", "yes"):
+        return "Tracing: off (LANGSMITH_TRACING is disabled)"
+    return f"Tracing: on -> LangSmith project '{os.environ['LANGSMITH_PROJECT']}'"
+
+
 def _pending_review(agent, config) -> dict | None:
     """Return the pending human-review request if the run is paused, else None.
 
@@ -170,13 +192,24 @@ def _review_report(request: dict) -> dict:
 def main() -> None:
     OUT_DIR.mkdir(exist_ok=True)
     MEM_DIR.mkdir(exist_ok=True)
-    prompt = f"Build this week's AI-news report. Today is {date.today():%Y-%m-%d}."
+    today = date.today()
+    prompt = f"Build this week's AI-news report. Today is {today:%Y-%m-%d}."
+
+    tracing_status = _configure_tracing()
 
     # A checkpointer + thread_id let the report-review interrupt pause and resume.
     agent = build_agent(checkpointer=MemorySaver())
-    config = {"configurable": {"thread_id": uuid.uuid4().hex}, "recursion_limit": 100}
+    # run_name/tags/metadata make the LangSmith trace easy to find and group.
+    config = {
+        "configurable": {"thread_id": uuid.uuid4().hex},
+        "recursion_limit": 100,
+        "run_name": f"throughline-{today:%Y-%m-%d}",
+        "tags": ["throughline", "weekly-report"],
+        "metadata": {"app": "throughline", "week": f"{today:%Y-%m-%d}"},
+    }
 
-    print("Throughline — building this week's report. Live progress:\n", flush=True)
+    print("Throughline — building this week's report. Live progress:")
+    print(f"  {tracing_status}\n", flush=True)
 
     # Stream so the run narrates itself instead of sitting silent. "updates" drives
     # the progress lines; "values" carries the full state, whose last root emission
