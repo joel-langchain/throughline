@@ -17,6 +17,14 @@ dependencies = [
     "tavily-python",
 ]
 
+[project.optional-dependencies]
+# The live run visualiser (viz/). Optional so the core agent stays lean; install
+# with `uv sync --extra viz` (or `pip install -e '.[viz]'`).
+viz = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]
+
 [dependency-groups]
 dev = [
     "ruff>=0.6",

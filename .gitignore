@@ -11,3 +11,6 @@ memory/*
 post_assets/
 post_history/
 
+# Live run visualiser — local demo tool, kept out of version control.
+viz/
+
