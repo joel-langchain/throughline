@@ -29,11 +29,19 @@ flowchart TD
     R1 -.-> G
     R2 -.-> G
     R3 -.-> G
-    R1 --> S[Editor drops SKIPs, then<br/>synthesises ONE cited report]
-    R2 --> S
-    R3 --> S
-    S --> O[report.md +<br/>dated copy in output/reports/]
-    S --> U[(Update memory<br/>for next week)]
+    R1 --> V{Citation verifier<br/>claims match<br/>the cited sources?}
+    R2 --> V
+    R3 --> V
+    V -->|gap found| B
+    V -->|verified| S[Editor drops SKIPs, then<br/>synthesises ONE cited report]
+    S --> HITL{Risk signals?<br/>sensitive terms,<br/>thin sourcing}
+    HITL -->|yes| HR([Human review<br/>approve · edit · reject])
+    HITL -->|no| FP
+    HR --> FP{Final-pass reviewer<br/>whole-report coherence,<br/>style + governance}
+    FP -->|revise| S
+    FP -->|approve| RN[Host renumbers citations<br/>to a global 1..N sequence]
+    FP -->|approve| U[(Update memory<br/>for next week)]
+    RN --> O[report.md +<br/>dated copy in output/reports/]
     U -.->|next week| MEM
 ```
 
@@ -48,9 +56,19 @@ editor (strong model)
   │       /research/<topic>/sources.md, return one cited summary + KEEP/SKIP
   │       verdict
   └──► ... one researcher per topic ...
-  collect summaries → drop the SKIPs (quality gate) → synthesise ONE cited
-  report → /output/report.md (+ a dated copy in /output/reports/)
+  collect summaries → drop the SKIPs (quality gate)
+  ├──► citation-verifier (per kept topic): do the claims match the cited
+  │       sources? on a FLAG, re-dispatch the researcher to close the gap and
+  │       re-verify (bounded retry), dropping any claim that still can't be backed
+  synthesise ONE cited report → /output/report.md
+  ├──► human review — only when risk signals fire — approve / edit / reject
+  ├──► final-pass-reviewer: read the whole report end to end and APPROVE or
+  │       REVISE for coherence, style, and governance before publishing
   update /memories/ (coverage.md + this-week.json) so next week builds on this one
+
+then, outside the agent, the runner assigns a global 1..N citation sequence
+(deterministic — numbering is host work, not the model's) and writes
+/output/report.md + a dated copy in /output/reports/.
 ```
 
 Why multi-agent: topics are independent, so researchers run **in parallel**, each
@@ -110,6 +128,23 @@ Building in public, newest first. Ticked items in the roadmap below are done;
 the core that predates the roadmap is captured here too. Everything is a
 deliberately simple first cut and will be refined.
 
+- **Deterministic citation numbering** — the editor cites each claim by source
+  URL and the runner assigns a global 1..N sequence, so every inline marker
+  resolves to a source and every source is cited (numbering is host work, taken
+  out of the model where it used to drift).
+- **Evals** — a frozen-week golden dataset with planted defects, scored by
+  reference-free evaluators (citation integrity, source quality, groundedness,
+  dedup, and editorial voice) that run offline or on live traces.
+- **Human-in-the-loop review** — the finished report pauses for a human to
+  approve, edit, or reject, but only when risk signals fire (sensitive terms,
+  thin sourcing, or the editor's own uncertainty), so clean weeks publish
+  untouched.
+- **Citation verification** — a verifier subagent checks each kept topic's claims
+  against its quarantined sources; a flagged gap re-dispatches the researcher in
+  a bounded re-research loop, and claims that still can't be backed are dropped.
+- **LangSmith tracing** — every run is traced end to end for observability.
+- **Config-driven source lists** — allow/deny domains and scan seeds live in
+  `sources.toml`, tunable without touching code.
 - **Cross-week memory & continuity** — the editor reads a running coverage ledger
   before it clusters, tags each topic **NEW** or **DEVELOPING**, drops pure
   repeats, and leads developing storylines with what changed. Weeks now build on
@@ -138,10 +173,11 @@ Building this in public — rough order, not fixed. Contributions and ideas welc
 
 **Trust & quality**
 
-- [ ] Human-in-the-loop review/approve step before anything is published
-- [ ] Config-driven source allow/deny lists (currently hard-coded)
-- [ ] Citation verification — check that claims actually match the cited source
-- [ ] Evals — score reports on source quality, factuality, dedup, and voice
+- [x] Human-in-the-loop review/approve step before anything is published
+  _(conditional — fires only on risk signals)_
+- [x] Config-driven source allow/deny lists _(now in `sources.toml`)_
+- [x] Citation verification — check that claims actually match the cited source
+- [x] Evals — score reports on source quality, factuality, dedup, and voice
 
 **Publishing**
 
@@ -162,7 +198,7 @@ Building this in public — rough order, not fixed. Contributions and ideas welc
 
 - [ ] Deployment (LangSmith Deployment)
 - [ ] Scheduled weekly runs (cron)
-- [ ] Monitoring & tracing (LangSmith)
+- [x] Monitoring & tracing (LangSmith) _(tracing wired; dashboards/alerts to come)_
 - [ ] Cost controls — token budgets and per-run cost tracking
 - [ ] Resilience — retries, rate-limit handling, and graceful search failures
 
