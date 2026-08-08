@@ -11,6 +11,8 @@ fault an evaluator should catch:
     duplicate_topic    — a previously-covered topic re-presented as NEW (dedup)
     off_voice          — a hypey, marketing-tone paragraph (voice)
     weak_sources       — a press-release/wire domain in the citations (source quality)
+    citation_mismatch  — sections restart local [n] numbering while Sources stays
+                         global, orphaning sources (citation integrity)
 
 The clean report and the prior-coverage ledger are self-contained here so the set
 is stable and reproducible; ``golden_examples()`` returns them in LangSmith
@@ -101,7 +103,7 @@ def _off_voice(report: str) -> str:
         "nearest closed rival [4].",
         "This is an absolutely game-changing, revolutionary breakthrough that will "
         "completely transform everything and blow your mind — the most insane, "
-        "mind-blowing, jaw-dropping leap the industry has ever witnessed.",
+        "mind-blowing, jaw-dropping leap the industry has ever witnessed [3][4].",
     )
 
 
@@ -113,6 +115,31 @@ def _weak_sources(report: str) -> str:
     )
 
 
+def _citation_mismatch(report: str) -> str:
+    """Restart citation numbering per section while Sources stays global.
+
+    Mirrors the real failure mode: the later sections use local [1][2] numbering
+    even though the Sources list is a single global 1-8 sequence, so sources 5-8
+    end up orphaned (listed but nothing points to them) and the markers collide
+    with section one's. Everything else — sourcing, grounding, tone — is intact,
+    so only the citation-integrity check should fire.
+    """
+    report = report.replace(
+        "briefing only six companies [5]. Legislators criticised the closed "
+        "process as inadequate for the risks it addresses [6].",
+        "briefing only six companies [1]. Legislators criticised the closed "
+        "process as inadequate for the risks it addresses [2].",
+    )
+    return report.replace(
+        "hubs outside the cloud duopoly [7]. Analysts warned that building "
+        "frontier training capacity overseas carries distinct "
+        "national-security risk [8].",
+        "hubs outside the cloud duopoly [1]. Analysts warned that building "
+        "frontier training capacity overseas carries distinct "
+        "national-security risk [2].",
+    )
+
+
 def golden_examples() -> list[dict]:
     """Return the golden set as LangSmith examples (inputs + reference outputs)."""
     variants: list[tuple[str, str | None, str]] = [
@@ -121,6 +148,7 @@ def golden_examples() -> list[dict]:
         ("defect-duplicate-topic", "duplicate_topic", _duplicate_topic(CLEAN_REPORT)),
         ("defect-off-voice", "off_voice", _off_voice(CLEAN_REPORT)),
         ("defect-weak-sources", "weak_sources", _weak_sources(CLEAN_REPORT)),
+        ("defect-citation-mismatch", "citation_mismatch", _citation_mismatch(CLEAN_REPORT)),
     ]
     examples: list[dict] = []
     for name, defect, report in variants:

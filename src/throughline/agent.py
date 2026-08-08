@@ -18,6 +18,8 @@ Architecture (deepagents editor + subagent team):
       close the gap and re-verify (bounded retry — loop 2), dropping/correcting
       any claims that still cannot be supported,
       synthesise ONE report with citations → /output/report.md, then
+      have a final-pass-reviewer subagent read the assembled report end to end
+      (APPROVE/REVISE on whole-report coherence) before publishing, then
       update memory (/memories/coverage.md + /memories/this-week.json) so
       next week builds on this one.
 
@@ -129,6 +131,17 @@ How to work:
    - SUPPORTED — the cited source states or clearly implies the claim.
    - UNSUPPORTED — the source does not back it, the [n] points to the wrong
      source, or the claim overstates what the source actually says.
+4. Two extra faithfulness checks, using ONLY sources.md:
+   - PROPER-NOUN / NUMBER FIDELITY: every model name, product name, organisation,
+     person, and quantity in the summary must appear in the source material. Flag
+     any that do not — a name or figure the sources never mention (e.g. a
+     model called something the sources don't call it) is UNSUPPORTED, even if the
+     surrounding claim is broadly true. This guards against invented or
+     misremembered names.
+   - ATTRIBUTION BALANCE: if the summary pins a behaviour or result on ONE party
+     (one company, one model) but the cited source attributes it to several, that
+     is an overstatement — flag it as UNSUPPORTED so the editor can attribute it
+     evenly.
 
 Return ONLY this, as your reply:
   TOPIC: <topic>
@@ -155,6 +168,71 @@ citation_verifier = {
     "tools": [],
     "model": model,
     "permissions": verifier_permissions,
+}
+
+
+# --- The final-pass reviewer subagent --------------------------------------
+
+FINAL_PASS_PROMPT = """You are the final-pass reviewer for a weekly AI-news
+report. The per-topic research and citation checks are already done; your job is
+the last read-through a human editor does before publishing — does the WHOLE
+report hold together as one coherent piece? You judge the assembled report, not
+individual sources.
+
+How to work:
+1. Read /output/report.md — the finished, synthesised report. This is the ONLY
+   thing you review. Do NOT search the web, do NOT re-check citations against
+   sources (that has already been done), and do NOT read the research folders.
+2. Read it end to end as a subscriber would and check the whole-report qualities:
+   - COHERENCE: the topics form one thread, not a disconnected list; the opening
+     paragraph's "what actually happened / where the market is moving" actually
+     matches the sections that follow. If the intro claims storylines "converge"
+     or "connect", a body section must actually make that link — flag an intro
+     promise the body never delivers. Flag an unexplained prior-week callback that
+     assumes the reader saw last week's edition.
+   - CONTINUITY: if there are DEVELOPING storylines, the "Since last week:" thread
+     reads sensibly and each developing section leads with what changed.
+   - CONSISTENCY: no two sections contradict each other; the framing is even.
+   - COMPLETENESS: required structure is present (title with date, intro
+     paragraph, one "##" section per kept topic, a "## Sources" list) and nothing
+     is a leftover placeholder, TODO, empty heading, or truncated sentence.
+   - CITATIONS: citations are written as [[url]] markers in the prose (a
+     downstream step converts them to numbered [n] and builds the numbered
+     Sources list, so do NOT police numbering here). Check instead that every
+     claim that needs a source carries a [[url]] marker, that each such URL also
+     appears once in the Sources list, and that the Sources list has no entry that
+     is never cited in the prose.
+   - PRECISION: flag a count given as a range for a single quantity, and a
+     comparative (e.g. "100x cheaper") stated without the unit it is measured in.
+
+Return ONLY this, as your reply:
+  VERDICT: APPROVE | REVISE
+  ISSUES:
+    - <one line: a concrete, fixable problem with the assembled report>
+    - ...                       # leave empty when VERDICT is APPROVE
+  NOTE: <one line — overall read on whether this is ready to publish>
+Report REVISE only for real whole-report problems the editor can fix by editing
+/output/report.md; do not nitpick wording. Keep it terse and do not rewrite the
+report yourself."""
+
+final_pass_permissions = [
+    # Read-only on the finished report; the reviewer returns a verdict in its
+    # reply, never writes, and never touches the research folders or memory.
+    FilesystemPermission(operations=["read"], paths=["/output/**"], mode="allow"),
+    FilesystemPermission(operations=["write"], paths=["/**"], mode="deny"),
+]
+
+final_pass_reviewer = {
+    "name": "final-pass-reviewer",
+    "description": (
+        "Read the finished /output/report.md end to end and return APPROVE or "
+        "REVISE on whether the whole report holds together (coherence, continuity, "
+        "consistency, completeness). Call once after the report is written."
+    ),
+    "system_prompt": FINAL_PASS_PROMPT,
+    "tools": [],
+    "model": model,
+    "permissions": final_pass_permissions,
 }
 
 
@@ -217,13 +295,59 @@ Work in this order:
      _One-paragraph "what actually happened and where the market is moving."
      Open this with a short "Since last week:" clause when there are DEVELOPING
      storylines, so the reader feels the continuity._
-     ## <Topic>  <add "(developing)" to the heading for DEVELOPING storylines>
-     <2-4 sentences of synthesis with inline [n] citations; for a developing
-     story, lead with what actually changed since last week>
+     ## <Topic>  <tag each heading: "(developing)" for a DEVELOPING storyline,
+     "(new)" for a NEW one — the tag MUST match the status you assigned in step 3>
+     <2-4 sentences of synthesis with inline [[url]] citations (see CITATIONS
+     below); for a developing story, LEAD with what actually changed since last
+     week. Give NEW and DEVELOPING sections even treatment — do not let one type
+     carry a "what changed" line while another of the same type omits it.>
+     <where a genuine, concrete practitioner implication exists, close the section
+     with ONE plain sentence on what it means for someone building with AI. Only
+     when it is real — never manufacture a takeaway to fill the slot.>
      ...
      ## Sources
-     <numbered list of every cited source across topics>
-8. UPDATE YOUR MEMORY so next week can build on this one. Write TWO files:
+     <one source per line, each line: "<outlet> — <title> — <date> — <url>".
+     Do NOT number these lines yourself and do not worry about their order — a
+     downstream step numbers them. Just make sure every source you cited in the
+     prose appears here exactly once, with its URL.>
+
+   CITATIONS — cite by URL, do NOT number:
+   - In the prose, cite each claim by wrapping the source's URL in DOUBLE square
+     brackets right after the claim: e.g. "...17 unsanctioned actions
+     [[https://www.theguardian.com/technology/2026/aug/05/...]]." Stack them for
+     multiple sources: "[[url1]][[url2]]". Use the exact URL from the researcher's
+     SOURCES for that claim.
+   - Do NOT write bare numeric markers like [1] or per-section numbers — a
+     deterministic downstream step reads your [[url]] markers, assigns the global
+     1..N numbering, and rebuilds the numbered Sources list. Your only job is to
+     attach the RIGHT URL to each claim and list that URL in Sources. This removes
+     the whole class of "sections restart numbering / sources get orphaned" bugs.
+   - Cite PRIMARY sources where a story rests on one (e.g. a Science/Nature/arXiv
+     paper): put the paper's own URL on the claim and in Sources, not only the
+     secondary coverage.
+   - Precision in the prose: give counts as a single number (if two sources
+     disagree, say so and pick one — do not print a range for a single quantity);
+     and when you state a comparative (e.g. "100x cheaper"), name the unit it is
+     measured in (per output token, per task, etc.).
+
+   INTRO discipline: only assert that storylines "converge" or "connect" if a
+   section in the body actually makes that link — if so, write the connective
+   sentence; if not, drop the claim and just say what happened. Do not open with an
+   unexplained callback (e.g. a named prior-week event) that assumes the reader saw
+   last week's edition; name it only if you explain it in one clause.
+8. FINAL PASS. After the report is written, delegate ONCE to the
+   final-pass-reviewer subagent via the task tool. It reads the whole
+   /output/report.md end to end and returns APPROVE or REVISE on whether the
+   report holds together as one coherent piece (coherence, continuity,
+   consistency, completeness) — the last read-through before publishing.
+   - If APPROVE, proceed.
+   - If REVISE, fix the concrete issues it lists by editing /output/report.md
+     (write the corrected report back to the same path), then delegate to the
+     final-pass-reviewer ONE more time to confirm. Do this re-review AT MOST once;
+     if it still reports issues, apply the clearest fixes and move on. Do NOT
+     re-run research or re-write topic summaries here — this pass is about the
+     assembled report only.
+9. UPDATE YOUR MEMORY so next week can build on this one. Write TWO files:
    a) /memories/coverage.md — the running ledger. Keep the prior entries, then
       append a section for this week:
         ## Week of <date>
@@ -235,7 +359,7 @@ Work in this order:
       {"week": "<date>", "topics": [
         {"topic": "<name>", "status": "NEW|DEVELOPING",
          "synopsis": "<one line>", "sources": ["<url>", ...]}, ...]}
-9. End your reply with a SHORT plain-text teaser (2-3 sentences) suitable for a
+10. End your reply with a SHORT plain-text teaser (2-3 sentences) suitable for a
    social post, plus a note of how many topics you kept vs dropped, how many were
    NEW vs DEVELOPING, how many had citations flagged by the verifier, and why.
 
@@ -342,7 +466,7 @@ def build_agent(checkpointer=None):
         model=strong_model,
         tools=[scan_ai_week],
         system_prompt=EDITOR_PROMPT,
-        subagents=[topic_researcher, citation_verifier],
+        subagents=[topic_researcher, citation_verifier, final_pass_reviewer],
         permissions=editor_permissions,
         interrupt_on=report_review,
         checkpointer=checkpointer,

@@ -25,6 +25,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 
 from throughline.agent import build_agent, report_risk_signals
+from throughline.citations import renumber as renumber_citations
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "output"
@@ -265,7 +266,14 @@ def main() -> None:
     files = result.get("files", {})
     if "/output/report.md" not in files:
         raise SystemExit("Agent did not write /output/report.md — check the run above.")
-    report_body = _content(files["/output/report.md"])
+    # Numbering citations is deterministic host work, not the model's job: the
+    # editor cites by [[url]] and this pass assigns global 1..N and rebuilds the
+    # Sources list into a guaranteed 1:1 mapping. See citations.renumber.
+    report_body, citation_warnings = renumber_citations(_content(files["/output/report.md"]))
+    if citation_warnings:
+        print("\nCitation pass:")
+        for w in citation_warnings:
+            print(f"  ⚠ {w}")
 
     out_root = OUT_DIR.resolve()
     mem_root = MEM_DIR.resolve()
@@ -275,8 +283,11 @@ def main() -> None:
         if path.startswith(MEM_PREFIX):
             # Persistent cross-week memory -> ./memory
             _mirror_file(path, body, MEM_DIR, mem_root, path[len(MEM_PREFIX):])
+        elif path == "/output/report.md":
+            # The finished report -> ./output, with deterministic citation numbers.
+            _mirror_file(path, report_body, OUT_DIR, out_root, "report.md")
         else:
-            # This week's report and research archive -> ./output
+            # This week's research archive -> ./output
             rel = path[len("/output/"):] if path.startswith("/output/") else path.lstrip("/")
             _mirror_file(path, body, OUT_DIR, out_root, rel)
 

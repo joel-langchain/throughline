@@ -23,7 +23,7 @@ from throughline import models  # noqa: F401  (import side effect: loads .env)
 DATASET_NAME = "throughline-golden"
 DATASET_DESCRIPTION = (
     "Throughline golden set: one frozen clean week plus planted-defect variants "
-    "(unsupported claim, duplicate topic, off-voice, weak sources)."
+    "(unsupported claim, duplicate topic, off-voice, weak sources, citation mismatch)."
 )
 
 

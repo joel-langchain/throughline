@@ -28,6 +28,8 @@ from throughline.config import PRESS_RELEASE_DOMAINS, REPUTABLE_DOMAINS
 _URL = re.compile(r"https?://[^\s)\]]+")
 _HEADING = re.compile(r"^##\s+(.*)$", re.MULTILINE)
 _CITE = re.compile(r"\[\d+\]")
+_CITE_N = re.compile(r"\[(\d+)\]")
+_SOURCE_LINE = re.compile(r"^\s*(\d+)[.)]\s+\S", re.MULTILINE)
 
 # Marketing-hype phrases that clash with Throughline's measured, analytical voice.
 HYPE_TERMS = (
@@ -76,6 +78,12 @@ def _body(report: str) -> str:
     return "\n".join(ln for ln in main.splitlines() if not ln.lstrip().startswith("#"))
 
 
+def _sources_block(report: str) -> str:
+    """The Sources section text (everything after the '## Sources' heading)."""
+    parts = re.split(r"^##\s+Sources\b", report, flags=re.MULTILINE)
+    return parts[1] if len(parts) > 1 else ""
+
+
 def _coverage_topics(coverage: str) -> list[str]:
     topics: list[str] = []
     for line in coverage.splitlines():
@@ -121,6 +129,44 @@ def score_groundedness(report: str) -> tuple[float, str]:
     if not uncited:
         return 1.0, f"all {total} quantitative claims cited"
     return round(score, 3), f"uncited claim(s): {'; '.join(uncited)}"
+
+
+def score_citation_integrity(report: str) -> tuple[float, str]:
+    """Every inline [n] resolves to a Sources entry, and vice versa, contiguously.
+
+    Catches the failure mode where sections use local per-section numbering while
+    the Sources list is global: dangling markers (an [n] with no source), orphan
+    sources (a listed source nothing cites), and non-contiguous numbering.
+    """
+    inline = {int(n) for n in _CITE_N.findall(_body(report))}
+    sources = {int(n) for n in _SOURCE_LINE.findall(_sources_block(report))}
+    if not inline and not sources:
+        return 0.0, "no citations or sources found"
+    if not sources:
+        return 0.0, "inline citations present but no Sources list"
+
+    dangling = sorted(inline - sources)  # [n] markers pointing at nothing
+    orphan = sorted(sources - inline)  # listed sources nothing cites
+    contiguous = sources == set(range(1, max(sources) + 1))
+
+    problems = set(dangling) | set(orphan)
+    if not contiguous:
+        problems |= set(range(1, max(sources) + 1)) - sources
+    universe = inline | sources | problems
+    score = max(0.0, 1.0 - len(problems) / max(len(universe), 1))
+
+    if not dangling and not orphan and contiguous:
+        return 1.0, f"all {len(sources)} citations resolve 1:1 and numbering is contiguous"
+    notes: list[str] = []
+    if dangling:
+        notes.append(f"dangling marker(s) with no source: {dangling}")
+    if orphan:
+        notes.append(f"orphan source(s) never cited: {orphan}")
+    if not contiguous:
+        notes.append(
+            f"non-contiguous source numbering (max {max(sources)}, {len(sources)} listed)"
+        )
+    return round(score, 3), "; ".join(notes)
 
 
 def score_dedup(report: str, coverage: str) -> tuple[float, str]:
@@ -180,6 +226,12 @@ def groundedness(run, example=None) -> dict:
     report, _ = _extract(run, example)
     score, comment = score_groundedness(report)
     return {"key": "groundedness", "score": score, "comment": comment}
+
+
+def citation_integrity(run, example=None) -> dict:
+    report, _ = _extract(run, example)
+    score, comment = score_citation_integrity(report)
+    return {"key": "citation_integrity", "score": score, "comment": comment}
 
 
 def dedup(run, example=None) -> dict:
