@@ -13,6 +13,8 @@ Architecture (deepagents editor + subagent team):
       │       + a press-release verdict
       └──► ... one researcher per topic ...
       collect summaries, drop the ones that fail the quality gate,
+      then check each kept topic's citations against its quarantined sources
+      via a citation-verifier subagent, dropping/correcting unsupported claims,
       synthesise ONE report with citations → /output/report.md, then
       update memory (/memories/coverage.md + /memories/this-week.json) so
       next week builds on this one.
@@ -87,6 +89,52 @@ topic_researcher = {
 }
 
 
+# --- The citation verifier subagent ----------------------------------------
+
+VERIFIER_PROMPT = """You are a citation checker for a weekly AI-news report. You
+are given ONE topic, its research folder, and the researcher's summary with
+inline [n] citation markers. Your job is to decide whether each cited claim is
+actually supported by the quarantined source material — nothing else.
+
+How to work:
+1. Read /research/<topic>/sources.md — the researcher's complete, verbatim search
+   results for this topic. This is the ONLY evidence you may use. Do NOT search
+   the web and do NOT rely on outside knowledge.
+2. Go through the summary claim by claim. For each sentence carrying a [n] marker,
+   check whether source [n] in sources.md actually substantiates it.
+3. Judge each cited claim:
+   - SUPPORTED — the cited source states or clearly implies the claim.
+   - UNSUPPORTED — the source does not back it, the [n] points to the wrong
+     source, or the claim overstates what the source actually says.
+
+Return ONLY this, as your reply:
+  TOPIC: <topic>
+  VERDICT: PASS | FLAG        # FLAG if ANY cited claim is UNSUPPORTED
+  UNSUPPORTED:
+    - "<exact claim text>" [n] — <one line: what source [n] actually says>
+    - ...                       # leave empty when VERDICT is PASS
+Keep it terse. Do NOT rewrite the summary — only report what is not supported."""
+
+verifier_permissions = [
+    # Read-only: the verifier checks claims against the quarantined sources and
+    # must never write anywhere (it produces a verdict in its reply, not files).
+    FilesystemPermission(operations=["read"], paths=["/research/**"], mode="allow"),
+    FilesystemPermission(operations=["write"], paths=["/**"], mode="deny"),
+]
+
+citation_verifier = {
+    "name": "citation-verifier",
+    "description": (
+        "Check one topic's cited claims against its quarantined sources and return "
+        "PASS or FLAG with the unsupported claims. Delegate one topic per call."
+    ),
+    "system_prompt": VERIFIER_PROMPT,
+    "tools": [],
+    "model": model,
+    "permissions": verifier_permissions,
+}
+
+
 # --- The editor (main agent) -----------------------------------------------
 
 EDITOR_PROMPT = """You are the editor of Throughline, a weekly AI-news report.
@@ -124,7 +172,14 @@ Work in this order:
    its assigned folder (/research/<topic>/). Do NOT research topics yourself.
 5. Collect the returned summaries. Apply the QUALITY GATE: drop any topic whose
    verdict is SKIP (failed source quality or was just a reworded press release).
-6. Synthesise the KEPT topics into ONE report and write it with write_file to
+6. VERIFY CITATIONS. For EACH kept topic, delegate to the citation-verifier
+   subagent using the task tool. Give it the topic, its research folder
+   (/research/<topic>/), and the researcher's summary. The verifier reads only
+   the quarantined sources and returns PASS or FLAG with a list of unsupported
+   claims. For any FLAG: remove or correct the unsupported claims using ONLY the
+   cited sources before synthesis. If a topic's substance depends on claims that
+   cannot be supported, drop the topic. Never invent support to save a claim.
+7. Synthesise the KEPT topics into ONE report and write it with write_file to
    /output/report.md. Structure:
      # Throughline — This Week in AI · <date>
      _One-paragraph "what actually happened and where the market is moving."
@@ -136,7 +191,7 @@ Work in this order:
      ...
      ## Sources
      <numbered list of every cited source across topics>
-7. UPDATE YOUR MEMORY so next week can build on this one. Write TWO files:
+8. UPDATE YOUR MEMORY so next week can build on this one. Write TWO files:
    a) /memories/coverage.md — the running ledger. Keep the prior entries, then
       append a section for this week:
         ## Week of <date>
@@ -148,9 +203,9 @@ Work in this order:
       {"week": "<date>", "topics": [
         {"topic": "<name>", "status": "NEW|DEVELOPING",
          "synopsis": "<one line>", "sources": ["<url>", ...]}, ...]}
-8. End your reply with a SHORT plain-text teaser (2-3 sentences) suitable for a
+9. End your reply with a SHORT plain-text teaser (2-3 sentences) suitable for a
    social post, plus a note of how many topics you kept vs dropped, how many were
-   NEW vs DEVELOPING, and why.
+   NEW vs DEVELOPING, how many had citations flagged by the verifier, and why.
 
 Keep your own context on coordination and synthesis, not raw search text."""
 
@@ -164,6 +219,6 @@ agent = create_deep_agent(
     model=strong_model,
     tools=[scan_ai_week],
     system_prompt=EDITOR_PROMPT,
-    subagents=[topic_researcher],
+    subagents=[topic_researcher, citation_verifier],
     permissions=editor_permissions,
 )
