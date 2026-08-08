@@ -23,7 +23,7 @@ from pathlib import Path
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 
-from throughline.agent import build_agent
+from throughline.agent import build_agent, report_risk_signals
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "output"
@@ -143,7 +143,10 @@ def _review_report(request: dict) -> dict:
     content = args.get("content") or "(no content in the write call)"
 
     print("\n" + "=" * 60)
-    print("HUMAN REVIEW — draft report before it is finalised:\n")
+    print("HUMAN REVIEW — draft report held for the following reason(s):")
+    for reason in report_risk_signals(content):
+        print(f"  ⚠ {reason}")
+    print("\nDraft report:\n")
     print(content)
     print("=" * 60)
     print("Decision: [a]pprove  /  [e]dit (supply a file path)  /  [r]eject")
@@ -187,6 +190,7 @@ def main() -> None:
     }
     final_state: dict = {}
     rejected = False
+    reviewed = False
 
     while True:
         for namespace, mode, chunk in agent.stream(
@@ -204,6 +208,7 @@ def main() -> None:
         request = _pending_review(agent, config)
         if request is None:
             break  # the run finished (no pending interrupt)
+        reviewed = True
         decision = _review_report(request)
         if decision["type"] == "reject":
             rejected = True
@@ -214,6 +219,9 @@ def main() -> None:
         print("\n" + "=" * 60)
         print("Report rejected — nothing written to disk, memory left unchanged.")
         return
+
+    if not reviewed:
+        print("\n  ✓ no risk signals — report auto-approved (no human review needed)")
 
     result = final_state
 

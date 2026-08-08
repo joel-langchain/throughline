@@ -37,3 +37,13 @@ SCAN_SEEDS = list(_cfg.get("scan_seeds", []))
 # close unsupported-citation gaps before it must give up and drop the claims.
 # A hard cap on the verify -> re-research -> re-verify loop (bounds loop 2).
 MAX_VERIFY_RETRIES = int(_cfg.get("max_verify_retries", 2))
+
+# Conditional human review: risk signals that force a human to approve the report
+# before it is published. A clean week (none of these) is auto-approved.
+_review = _cfg.get("review", {})
+# Sensitive domains where a human should always look, however well-sourced.
+SENSITIVE_TERMS = [t.lower() for t in _review.get("sensitive_terms", [])]
+# Phrases the editor uses when unsure — a proxy for low confidence / open gaps.
+UNCERTAINTY_MARKERS = [m.lower() for m in _review.get("uncertainty_markers", [])]
+# Minimum distinct cited sources before the report may publish unreviewed.
+MIN_SOURCES = int(_review.get("min_sources", 0))

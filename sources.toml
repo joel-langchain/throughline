@@ -59,3 +59,41 @@ scan_seeds = [
   "AI policy regulation",
   "AI infrastructure compute",
 ]
+
+# review: when to pause the finished report for a human before publishing.
+# The report is auto-approved on a clean week; a human is only asked to review
+# when one of these risk signals shows up in the drafted report. Tune freely.
+[review]
+# Sensitive domains where an editorial human should always take a look, however
+# well-sourced the story is (dual-use, security, safety, integrity risks).
+sensitive_terms = [
+  "bioweapon",
+  "biosecurity",
+  "bioterror",
+  "pathogen",
+  "viral genome",
+  "nerve agent",
+  "chemical weapon",
+  "cbrn",
+  "malware",
+  "ransomware",
+  "zero-day",
+  "self-harm",
+  "election manipulation",
+  "disinformation campaign",
+]
+# Phrases the editor uses when it is itself unsure — a proxy for low confidence
+# or verification that could not fully close. Their presence forces a review.
+uncertainty_markers = [
+  "remains thin",
+  "could not verify",
+  "could not confirm",
+  "unconfirmed",
+  "unverified",
+  "no independent",
+  "corroboration remains",
+  "not been independently",
+]
+# Below this many distinct cited sources across the whole report, the sourcing is
+# considered too thin to publish unreviewed.
+min_sources = 8

@@ -30,11 +30,19 @@ persisted by the runner mirroring /memories/ to ./memory; on deployment that pat
 swaps to a persistent StoreBackend with no change to this agent.
 """
 
+import re
+
 from deepagents import FilesystemPermission, create_deep_agent
 from langchain.agents.middleware import InterruptOnConfig
 from langchain.agents.middleware.types import ToolCallRequest
 
-from throughline.config import MAX_VERIFY_RETRIES
+from throughline.config import (
+    MAX_VERIFY_RETRIES,
+    MIN_SOURCES,
+    PRESS_RELEASE_DOMAINS,
+    SENSITIVE_TERMS,
+    UNCERTAINTY_MARKERS,
+)
 from throughline.models import model, strong_model
 from throughline.tools import internet_search, scan_ai_week
 
@@ -257,8 +265,8 @@ REPORT_PATH = "/output/report.md"
 def _is_report_write(request: ToolCallRequest) -> bool:
     """True only when the model is writing the finished report to REPORT_PATH.
 
-    Used as the `when` predicate on the review interrupt so the human is asked to
-    approve only the report itself, not the many other file writes in a run.
+    Used as the path gate for the review interrupt so only the report itself is a
+    review candidate, not the many other file writes in a run.
     """
     tool_call = request.tool_call
     if tool_call.get("name") != "write_file":
@@ -266,14 +274,57 @@ def _is_report_write(request: ToolCallRequest) -> bool:
     return tool_call.get("args", {}).get("file_path") == REPORT_PATH
 
 
-# Pause the run to let a human approve, edit, or reject the report before it is
-# finalised. Requires a checkpointer at build time (see build_agent) so the graph
-# can pause and resume.
+def report_risk_signals(content: str) -> list[str]:
+    """Reasons the drafted report warrants a human look, or [] for a clean week.
+
+    The trigger for human review is deliberately conditional: a well-sourced,
+    confident, non-sensitive report is auto-approved, and a person is only pulled
+    in when the report trips one of the config-driven risk signals below. Also
+    used by the runner to tell the reviewer WHY the report was held.
+    """
+    reasons: list[str] = []
+    lower = content.lower()
+
+    # Sensitive/dual-use subject matter: a human should look however well-sourced.
+    hits = sorted(t for t in SENSITIVE_TERMS if t in lower)
+    if hits:
+        reasons.append(f"sensitive topic ({', '.join(hits)})")
+
+    # The editor's own hedging — a proxy for low confidence / gaps it couldn't close.
+    markers = sorted(m for m in UNCERTAINTY_MARKERS if m in lower)
+    if markers:
+        reasons.append(f"editor flagged uncertainty ({', '.join(markers)})")
+
+    # Thin sourcing: too few distinct cited URLs to publish unreviewed.
+    distinct = {u.rstrip(".,);]") for u in re.findall(r"https?://[^\s)\]]+", content)}
+    if MIN_SOURCES and len(distinct) < MIN_SOURCES:
+        reasons.append(f"thin sourcing ({len(distinct)} cited, want >= {MIN_SOURCES})")
+
+    # A press-release/wire domain slipped into the citations despite the filters.
+    cited_press = sorted(d for d in PRESS_RELEASE_DOMAINS if d in lower)
+    if cited_press:
+        reasons.append(f"press-release source cited ({', '.join(cited_press)})")
+
+    return reasons
+
+
+def _report_needs_review(request: ToolCallRequest) -> bool:
+    """Fire the interrupt only for a report write that trips a risk signal."""
+    if not _is_report_write(request):
+        return False
+    content = request.tool_call.get("args", {}).get("content", "")
+    return bool(report_risk_signals(content))
+
+
+# Pause the run to let a human approve, edit, or reject the report ONLY when it
+# trips a risk signal (sensitive topic, editor uncertainty, thin/weak sourcing).
+# Clean weeks are auto-approved. Requires a checkpointer at build time (see
+# build_agent) so the graph can pause and resume.
 report_review = {
     "write_file": InterruptOnConfig(
         allowed_decisions=["approve", "edit", "reject"],
-        when=_is_report_write,
-        description="Review this week's Throughline report before it is finalised.",
+        when=_report_needs_review,
+        description="This week's report tripped a risk signal — review before it is finalised.",
     )
 }
 
