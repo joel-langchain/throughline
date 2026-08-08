@@ -13,9 +13,11 @@ deployed later, ``/memories/`` swaps to a persistent ``StoreBackend`` and this
 host-side mirror goes away — the agent's paths and prompt stay identical.
 
 Usage:
-    uv run python -m throughline.run
+    uv run python -m throughline.run            # auto-approve (default)
+    uv run python -m throughline.run --review   # pause for human review on risk
 """
 
+import argparse
 import os
 import uuid
 from datetime import date
@@ -190,7 +192,25 @@ def _review_report(request: dict) -> dict:
     return {"type": "approve"}
 
 
-def main() -> None:
+def _auto_approve(request: dict) -> dict:
+    """Approve a held report without prompting, noting why it was flagged.
+
+    The default for unattended/scheduled runs: risk detection still runs and the
+    reasons are surfaced for the trace and console, but the run is not blocked.
+    Pass --review to inspect and decide interactively instead.
+    """
+    action = request["action_requests"][0]
+    content = action.get("args", {}).get("content", "")
+    print("\n" + "=" * 60)
+    print("AUTO-APPROVED — report tripped a risk signal but review is off:")
+    for reason in report_risk_signals(content):
+        print(f"  ⚠ {reason}")
+    print("  (run with --review to inspect and approve / edit / reject)")
+    print("=" * 60)
+    return {"type": "approve"}
+
+
+def main(review: bool = False) -> None:
     OUT_DIR.mkdir(exist_ok=True)
     MEM_DIR.mkdir(exist_ok=True)
     today = date.today()
@@ -215,8 +235,9 @@ def main() -> None:
     # Stream so the run narrates itself instead of sitting silent. "updates" drives
     # the progress lines; "values" carries the full state, whose last root emission
     # is the finished run we mirror to disk. subgraphs=True lets the parallel
-    # researchers' searches surface too. The run may pause for human review of the
-    # report, so wrap the stream in a resume loop.
+    # researchers' searches surface too. The report-review interrupt may fire when a
+    # risk signal trips; by default we auto-approve (unattended-friendly), or
+    # --review prompts a human. Either way, wrap the stream in a resume loop.
     stream_input: object = {
         "messages": [{"role": "user", "content": prompt}],
         # Seed prior weeks so the editor can dedup and track storylines.
@@ -224,7 +245,7 @@ def main() -> None:
     }
     final_state: dict = {}
     rejected = False
-    reviewed = False
+    held = False
 
     while True:
         for namespace, mode, chunk in agent.stream(
@@ -242,11 +263,14 @@ def main() -> None:
         request = _pending_review(agent, config)
         if request is None:
             break  # the run finished (no pending interrupt)
-        reviewed = True
-        decision = _review_report(request)
-        if decision["type"] == "reject":
-            rejected = True
-        # Resume the paused run with the human's decision.
+        held = True
+        if review:
+            decision = _review_report(request)
+            if decision["type"] == "reject":
+                rejected = True
+        else:
+            decision = _auto_approve(request)
+        # Resume the paused run with the decision.
         stream_input = Command(resume={"decisions": [decision]})
 
     if rejected:
@@ -254,7 +278,7 @@ def main() -> None:
         print("Report rejected — nothing written to disk, memory left unchanged.")
         return
 
-    if not reviewed:
+    if not held:
         print("\n  ✓ no risk signals — report auto-approved (no human review needed)")
 
     result = final_state
@@ -303,4 +327,16 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Build this week's Throughline AI-news report."
+    )
+    parser.add_argument(
+        "--review",
+        action="store_true",
+        default=os.getenv("THROUGHLINE_REVIEW", "").lower() in ("1", "true", "yes"),
+        help="Pause for interactive human review when the report trips a risk "
+        "signal. Default is auto-approve (suited to unattended/scheduled runs); "
+        "can also be enabled with THROUGHLINE_REVIEW=1.",
+    )
+    args = parser.parse_args()
+    main(review=args.review)

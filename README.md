@@ -35,7 +35,7 @@ flowchart TD
     V -->|gap found| B
     V -->|verified| S[Editor drops SKIPs, then<br/>synthesises ONE cited report]
     S --> HITL{Risk signals?<br/>sensitive terms,<br/>thin sourcing}
-    HITL -->|yes| HR([Human review<br/>approve · edit · reject])
+    HITL -->|yes| HR([Human review, opt-in<br/>approve · edit · reject<br/>else auto-approve])
     HITL -->|no| FP
     HR --> FP{Final-pass reviewer<br/>whole-report coherence,<br/>style + governance}
     FP -->|revise| S
@@ -93,8 +93,14 @@ uv sync
 ## Run
 
 ```bash
-uv run python -m throughline.run
+uv run python -m throughline.run            # auto-approve (default)
+uv run python -m throughline.run --review   # pause for human review on risk
 ```
+
+By default the run is unattended: if the report trips a risk signal it is
+auto-approved and the reason is logged (suited to scheduled runs). Pass
+`--review` (or set `THROUGHLINE_REVIEW=1`) to pause for an interactive
+approve / edit / reject when a signal fires.
 
 The finished report lands in `output/report.md`, and a dated copy is kept in
 `output/reports/<YYYY-MM-DD>.md` so past weeks accumulate instead of being
@@ -135,10 +141,11 @@ deliberately simple first cut and will be refined.
 - **Evals** — a frozen-week golden dataset with planted defects, scored by
   reference-free evaluators (citation integrity, source quality, groundedness,
   dedup, and editorial voice) that run offline or on live traces.
-- **Human-in-the-loop review** — the finished report pauses for a human to
-  approve, edit, or reject, but only when risk signals fire (sensitive terms,
-  thin sourcing, or the editor's own uncertainty), so clean weeks publish
-  untouched.
+- **Human-in-the-loop review** — when the finished report trips a risk signal
+  (sensitive terms, thin sourcing, or the editor's own uncertainty) it can pause
+  for a human to approve, edit, or reject. Review is opt-in (`--review`); by
+  default flagged reports are auto-approved with the reason logged, so scheduled
+  runs never block and clean weeks publish untouched.
 - **Citation verification** — a verifier subagent checks each kept topic's claims
   against its quarantined sources; a flagged gap re-dispatches the researcher in
   a bounded re-research loop, and claims that still can't be backed are dropped.
@@ -174,7 +181,7 @@ Building this in public — rough order, not fixed. Contributions and ideas welc
 **Trust & quality**
 
 - [x] Human-in-the-loop review/approve step before anything is published
-  _(conditional — fires only on risk signals)_
+  _(opt-in `--review`; fires only on risk signals, auto-approve by default)_
 - [x] Config-driven source allow/deny lists _(now in `sources.toml`)_
 - [x] Citation verification — check that claims actually match the cited source
 - [x] Evals — score reports on source quality, factuality, dedup, and voice
