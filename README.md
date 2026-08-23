@@ -208,12 +208,20 @@ Which models are used is **code config**, not env — edit `WORKER_MODEL` /
 gateway accepts them via its `/anthropic` route). `TAVILY_API_KEY` still needs a
 real Tavily key — web search isn't gatewayed.
 
+**Deliver the report to Slack** (optional). Set a Slack incoming-webhook URL as a
+deployment secret and each finished run posts the report to that channel — so a
+scheduled run lands somewhere readable without a laptop. Unset → no delivery.
+
+```
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/XXX/YYY/ZZZ
+```
+
 **Schedule the weekly run** (once the deployment is live):
 
 ```bash
 export LANGGRAPH_DEPLOYMENT_URL="https://<your-deployment>.us.langgraph.app"
 export LANGSMITH_API_KEY="..."
-uv run python scripts/create_cron.py            # weekly, Mon 08:00 UTC
+uv run python scripts/create_cron.py            # weekly, Mon 05:00 UTC
 ```
 
 ## Shipped so far

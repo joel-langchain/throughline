@@ -48,6 +48,7 @@ from throughline.config import (
     SENSITIVE_TERMS,
     UNCERTAINTY_MARKERS,
 )
+from throughline.delivery import deliver_report
 from throughline.models import model, strong_model
 from throughline.tools import internet_search, scan_ai_week
 
@@ -478,6 +479,15 @@ def _memory_namespace(runtime: object) -> tuple[str, ...]:
 # --- Deterministic citation numbering, done in-graph -----------------------
 
 
+def _report_body(files: dict | None) -> str | None:
+    """Return the report text from filesystem state, or None if not written yet."""
+    fd = (files or {}).get(REPORT_PATH)
+    if not fd:
+        return None
+    body = fd["content"] if isinstance(fd, dict) else fd
+    return "\n".join(body) if isinstance(body, list) else body
+
+
 def renumber_report_in_files(files: dict | None) -> dict | None:
     """Return a files-state update that renumbers the report, or None if N/A.
 
@@ -486,13 +496,9 @@ def renumber_report_in_files(files: dict | None) -> dict | None:
     numbers (see citations.renumber), and returns ONLY the changed file — the
     files channel merges by key, so the research archive and memory are untouched.
     """
-    files = files or {}
-    fd = files.get(REPORT_PATH)
-    if not fd:
+    body = _report_body(files)
+    if body is None:
         return None
-    body = fd["content"] if isinstance(fd, dict) else fd
-    if isinstance(body, list):
-        body = "\n".join(body)
     new_body, _warnings = renumber_citations(body)
     if new_body == body:
         return None
@@ -501,14 +507,20 @@ def renumber_report_in_files(files: dict | None) -> dict | None:
 
 @after_agent
 def renumber_citations_middleware(state, runtime) -> dict | None:
-    """After the editor finishes, renumber the report's citations in-graph.
+    """After the editor finishes: renumber the report in-graph, then deliver it.
 
-    Numbering is deterministic host-style work, but running it INSIDE the graph
-    (rather than only in the local runner) means a headless / scheduled run
-    produces a finished, correctly-numbered report on its own — no post-processing
-    step outside the agent is required.
+    Renumbering (deterministic host-style work, run INSIDE the graph) makes a
+    headless / scheduled run's report final on its own. Delivery then pushes that
+    finished report to Slack when SLACK_WEBHOOK_URL is set — a no-op otherwise — so
+    a scheduled run lands somewhere readable without a laptop. Delivery is
+    best-effort and never breaks the run or drops the report from state.
     """
-    return renumber_report_in_files(state.get("files"))
+    files = state.get("files")
+    update = renumber_report_in_files(files)
+    final_body = update["files"][REPORT_PATH]["content"] if update else _report_body(files)
+    if final_body:
+        deliver_report(final_body)
+    return update
 
 
 # --- Today's date, injected at run time ------------------------------------

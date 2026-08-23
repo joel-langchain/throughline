@@ -17,7 +17,7 @@ Setup:
     export LANGSMITH_API_KEY="..."   # same key as .env
 
 Usage:
-    uv run python scripts/create_cron.py                      # weekly, Mon 08:00 UTC
+    uv run python scripts/create_cron.py                      # weekly, Mon 05:00 UTC
     uv run python scripts/create_cron.py --schedule "0 7 * * 1"
     uv run python scripts/create_cron.py --list               # show existing crons
 """
@@ -28,8 +28,9 @@ import argparse
 import os
 import sys
 
-# Weekly on Monday at 08:00 UTC. Standard 5-field cron: min hour dom mon dow.
-DEFAULT_SCHEDULE = "0 8 * * 1"
+# Weekly on Monday at 05:00 UTC (06:00 BST) — the report is finished and delivered
+# well before the start of the working day.
+DEFAULT_SCHEDULE = "0 5 * * 1"
 GRAPH_ID = "throughline"
 # Static input — the same prompt a local run uses. Today's date is injected inside
 # the graph at run time (see agent.todays_date_middleware), so a cron created once
@@ -77,7 +78,7 @@ def main() -> None:
     parser.add_argument(
         "--schedule",
         default=DEFAULT_SCHEDULE,
-        help=f"5-field cron expression (default: '{DEFAULT_SCHEDULE}', Mon 08:00 UTC).",
+        help=f"5-field cron expression (default: '{DEFAULT_SCHEDULE}', Mon 05:00 UTC).",
     )
     parser.add_argument(
         "--list", action="store_true", help="List existing crons and exit."
