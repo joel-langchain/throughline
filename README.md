@@ -192,6 +192,23 @@ uv run langgraph dev           # optional: serve the same graph locally
 
 Either way, set `ANTHROPIC_API_KEY` and `TAVILY_API_KEY` as deployment secrets.
 
+**Model access — direct or via the LLM Gateway.** By default the agent calls
+Anthropic directly with `ANTHROPIC_API_KEY`. Alternatively, route model calls
+through the [LangSmith LLM Gateway](https://docs.langchain.com/langsmith/llm-gateway)
+— one LangSmith key, any provider's model, centrally traced and governed — with no
+code change, by setting deployment env vars:
+
+```
+ANTHROPIC_API_KEY=<your LangSmith key>
+ANTHROPIC_BASE_URL=https://gateway.smith.langchain.com   # your region's host
+THROUGHLINE_WORKER_MODEL=anthropic:anthropic/claude-haiku-4-5
+THROUGHLINE_EDITOR_MODEL=anthropic:anthropic/claude-sonnet-4-6
+```
+
+Model ids are config-driven (see [models.py](src/throughline/models.py)); the
+gateway needs provider-prefixed ids like `anthropic/claude-…`. `TAVILY_API_KEY`
+still needs a real Tavily key — web search isn't gatewayed.
+
 **Schedule the weekly run** (once the deployment is live):
 
 ```bash
