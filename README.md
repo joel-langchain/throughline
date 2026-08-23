@@ -255,6 +255,27 @@ export LANGSMITH_API_KEY="..."
 uv run python scripts/create_cron.py            # weekly, Mon 05:00 UTC
 ```
 
+## Self-host on your own infra
+
+You don't have to use the managed platform. The graph runs as a standard
+LangGraph server, so you can build an image and run the whole stack yourself.
+
+A `Dockerfile` and `docker-compose.yml` are committed here (generated with
+`uv run langgraph dockerfile Dockerfile --add-docker-compose`). The compose stack
+is the agent server plus the two services it needs: Postgres (persistence /
+memory store) and Redis (task queue).
+
+```bash
+cp .env.example .env      # add ANTHROPIC_API_KEY / TAVILY_API_KEY (+ SLACK_WEBHOOK_URL)
+docker compose up         # agent server on http://localhost:8123
+```
+
+Two honest caveats: you then own that stack (Postgres, Redis, scaling, backups,
+uptime), and the server image needs a licence key (`LANGGRAPH_CLOUD_LICENSE_KEY`,
+or a LangSmith key) for production self-hosting. That trade — run and maintain the
+infrastructure yourself, or let the managed platform handle it — is the whole
+reason [Deploy your own](#deploy-your-own) exists.
+
 ## Roadmap
 
 Building in public — grouped by the loop each item belongs to. **Every loop has
