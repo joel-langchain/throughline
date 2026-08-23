@@ -21,7 +21,7 @@ It's worth designing for all four from the start, even the ones you build later.
 | --- | --- | --- |
 | **1 · Agent loop** | Editor clusters the week into topics; parallel researchers gather sources; synthesise one cited report | ✅ built |
 | **2 · Verification loop** | Verifier checks claims against their sources, re-researches gaps, drops what can't be backed; deterministic citation numbering | ✅ built |
-| **3 · Event loop** | Deployed on LangGraph Platform; a weekly cron runs it unattended and delivers the report to Slack | ✅ built |
+| **3 · Event loop** | Deployed on LangGraph Platform; a weekly cron runs it unattended and delivers the report to Slack | ✅ live |
 | **4 · Improvement loop** | Golden-set evals + reference-free evaluators + tracing gate changes; online evaluators and reuse via assistants next | 🛠 building |
 
 ---
@@ -150,7 +150,9 @@ Using what happens in real runs to make the system better over time.
   evaluators on every push and PR, offline (no LangSmith, no secrets). It fails the
   build if an evaluator stops catching its planted defect or starts firing on the
   clean report — so a change that quietly weakens the evals can't merge. Lint
-  (ruff) and a `langgraph validate` job run alongside it.
+  (ruff) and a `langgraph validate` job run alongside it. `main` is protected and
+  changes land by PR with **auto-merge on green**, so the gate — not a human —
+  decides what reaches the deployment.
 - **Tracing** — every run is traced end to end in LangSmith.
 
 **Next in this loop:** online evaluators scoring production runs as usage grows;
@@ -255,31 +257,73 @@ uv run python scripts/create_cron.py            # weekly, Mon 05:00 UTC
 
 ## Roadmap
 
-Building in public — rough order, grouped by the loop each item belongs to.
-Contributions and ideas welcome.
+Building in public — grouped by the loop each item belongs to. **Every loop has
+open items**: none is "finished", each can be pushed further. Rough order within
+each; contributions and ideas welcome.
 
-**Loop 1 · Agent** — [x] cross-week memory & continuity · [x] track storylines
-week-over-week · [x] topic-level cross-week dedup _(source-level to come)_ ·
-[x] config-driven source allow/deny lists & scan seeds (`sources.toml`) ·
-[ ] configurable scan seeds and topic count · [ ] structured, typed researcher
-outputs.
+### Loop 1 · Agent
 
-**Loop 2 · Verification** — [x] citation verification + bounded re-research ·
-[x] human-in-the-loop review on risk signals · [x] deterministic in-graph
-citation numbering · [x] final-pass reviewer.
+_Done:_
 
-**Loop 3 · Event** — [x] deployment (LangGraph Platform) · [x] persistent-memory
-Store swap · [x] headless in-graph output · [x] scheduled weekly cron ·
-[x] Slack delivery · [ ] more output formats (social teaser, email digest) ·
-[ ] LinkedIn posting via MCP (draft → review → post) · [ ] resilience (retries,
-rate-limit handling) · [ ] cost controls (token budgets, per-run cost).
+- [x] Cross-week memory & continuity
+- [x] Track storylines week-over-week (what changed, what's new)
+- [x] Topic-level cross-week dedup _(source-level still to come)_
+- [x] Config-driven source allow/deny lists & scan seeds (`sources.toml`)
 
-**Loop 4 · Improvement** — [x] golden-set evals + reference-free evaluators ·
-[x] automated tests + CI gate · [x] tracing · [ ] online evaluators scoring
-production runs · [ ] reuse via assistants (others configure their own
-Throughline) · [ ] forecasting — record predictions and score them against what
-happens · [ ] market-movement analysis · [ ] chat with the week (Q&A over the
-report + research archives).
+_Next:_
+
+- [ ] Configurable scan seeds and topic count
+- [ ] More reliable topic selection — consistently surface the week's biggest stories
+- [ ] Structured, typed researcher outputs (not just free text)
+
+### Loop 2 · Verification
+
+_Done:_
+
+- [x] Citation verification + bounded re-research loop
+- [x] Human-in-the-loop review on risk signals
+- [x] Deterministic in-graph citation numbering
+- [x] Final-pass reviewer over the whole report
+
+_Next:_
+
+- [ ] Source-level dedup (not just topic-level)
+- [ ] Stronger source-tier enforcement (prefer primary / top-tier outlets)
+
+### Loop 3 · Event
+
+_Done:_
+
+- [x] Deployment (LangGraph Platform)
+- [x] Persistent-memory Store swap
+- [x] Headless in-graph output
+- [x] Scheduled weekly cron
+- [x] Slack delivery
+
+_Next:_
+
+- [ ] Report format — TL;DR + ranked headlines up top for fast reading
+- [ ] More output formats (social teaser, email digest)
+- [ ] LinkedIn posting via MCP (draft → review → post)
+- [ ] Resilience — retries, rate-limit handling, graceful search failures
+- [ ] Cost controls — token budgets and per-run cost tracking
+
+### Loop 4 · Improvement
+
+_Done:_
+
+- [x] Golden-set evals + reference-free evaluators
+- [x] Automated tests + CI gate (blocks regressions; auto-merge on green)
+- [x] End-to-end tracing
+
+_Next:_
+
+- [ ] Online evaluators scoring production runs as usage grows
+- [ ] Reuse via assistants — others configure their own Throughline (topics,
+  sources, models, cadence) against the same deployment
+- [ ] Forecasting — record predictions each week and score them against what happens
+- [ ] Market-movement analysis — where things are heading, not just what happened
+- [ ] Chat with the week — Q&A over the report and its research archives
 
 ## Notes on safety
 
