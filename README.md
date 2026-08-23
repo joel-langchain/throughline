@@ -261,17 +261,19 @@ Nothing here is locked to the managed platform. There are three ways to run it,
 with increasing infrastructure, and Redis/Postgres are a property of the serving
 layer, not of the agent:
 
-**1. Just the agent.** The graph is standard LangGraph (`langgraph` / `langchain`
-/ `deepagents`), so it is plain Python. `uv run python -m throughline.run` runs the
-whole thing end to end with **no Redis, no Postgres, and no LangSmith server** —
-just the deps and your API keys, persisting memory to local files. Drive it from
-your own script, cron, or function however you like.
+**1. Just the agent (free, no LangSmith).** The graph is standard LangGraph
+(`langgraph` / `langchain` / `deepagents`), so it is plain Python.
+`uv run python -m throughline.run` runs the whole thing end to end with **no Redis,
+no Postgres, and no LangSmith** — just the deps and your API keys (Anthropic +
+Tavily), persisting memory to local files. If you want the serving layer (an API,
+a queue, scheduling, a shared store) without any licence, you bring your own: wrap
+this graph in your own server/scheduler/storage. The agent and its logic are fully
+open; only *our* managed server is licensed.
 
-**2. Self-hosted server.** If you want the full serving layer around the graph (an
-API, a durable task queue, scheduled runs, and a shared store), run the committed
-`Dockerfile` + `docker-compose.yml` (generated with
+**2. Self-hosted server.** For the full serving layer as a package, run the
+committed `Dockerfile` + `docker-compose.yml` (generated with
 `uv run langgraph dockerfile Dockerfile --add-docker-compose`). The compose stack
-is the agent server plus the two services that layer needs: Postgres (the store)
+is the LangGraph Agent Server plus the two services it needs: Postgres (the store)
 and Redis (the queue).
 
 ```bash
@@ -279,9 +281,11 @@ cp .env.example .env      # add ANTHROPIC_API_KEY / TAVILY_API_KEY (+ SLACK_WEBH
 docker compose up         # agent server on http://localhost:8123
 ```
 
-You then own that stack (scaling, backups, uptime), and the server image needs a
-licence key (`LANGGRAPH_CLOUD_LICENSE_KEY`, or a LangSmith key) for production
-self-hosting.
+This runs on your infra, but note the Agent Server is the commercial piece: it
+requires a `LANGSMITH_API_KEY` and a `LANGGRAPH_CLOUD_LICENSE_KEY` (verified at
+startup, with a licence check to `beacon.langchain.com`), and you own the stack
+(scaling, backups, uptime). So this route is your infrastructure, not a
+LangSmith-free one. For a genuinely licence-free run, use option 1.
 
 **3. Managed.** Let [LangSmith Deployments](#deploy-your-own) run that same server
 for you. Same graph, none of the operational burden.
