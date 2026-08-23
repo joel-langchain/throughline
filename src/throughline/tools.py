@@ -21,13 +21,26 @@ from throughline.config import (
     SCAN_SEEDS as _SCAN_SEEDS,
 )
 
-_api_key = os.environ.get("TAVILY_API_KEY")
-if not _api_key:
-    raise RuntimeError(
-        "TAVILY_API_KEY is required. Copy .env.example to .env and fill it in."
-    )
+_tavily: TavilyClient | None = None
 
-_tavily = TavilyClient(api_key=_api_key)
+
+def _client() -> TavilyClient:
+    """Return the Tavily client, constructing it on first use.
+
+    The key is checked lazily (at call time, not import time) so importing this
+    module — and the agent/graph that depends on it — never requires a secret.
+    Only actually running a search needs TAVILY_API_KEY. This keeps offline tests,
+    `langgraph validate`, and graph construction working with no credentials.
+    """
+    global _tavily
+    if _tavily is None:
+        api_key = os.environ.get("TAVILY_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "TAVILY_API_KEY is required. Copy .env.example to .env and fill it in."
+            )
+        _tavily = TavilyClient(api_key=api_key)
+    return _tavily
 
 # Legitimacy is enforced deterministically, not left to the model's judgement.
 # The trust lists (deny/allow domains) and discovery seeds now live in
@@ -69,7 +82,7 @@ def scan_ai_week(extra_query: str = "") -> str:
     lines: list[str] = []
     for seed in seeds:
         try:
-            res = _tavily.search(seed, max_results=6, topic="news", days=7)
+            res = _client().search(seed, max_results=6, topic="news", days=7)
         except Exception as exc:  # keep scanning even if one seed fails
             lines.append(f"[search failed for '{seed}': {exc}]")
             continue
@@ -100,7 +113,7 @@ def internet_search(query: str, max_results: int = 8) -> dict:
     reputable sources — researchers, analysts, primary papers — over vendor
     marketing blogs.
     """
-    res = _tavily.search(query, max_results=max_results, topic="news", days=7)
+    res = _client().search(query, max_results=max_results, topic="news", days=7)
     kept = []
     for item in res.get("results", []):
         url = item.get("url", "")
