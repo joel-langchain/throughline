@@ -195,19 +195,18 @@ Either way, set `ANTHROPIC_API_KEY` and `TAVILY_API_KEY` as deployment secrets.
 **Model access — direct or via the LLM Gateway.** By default the agent calls
 Anthropic directly with `ANTHROPIC_API_KEY`. Alternatively, route model calls
 through the [LangSmith LLM Gateway](https://docs.langchain.com/langsmith/llm-gateway)
-— one LangSmith key, any provider's model, centrally traced and governed — with no
-code change, by setting deployment env vars:
+— one LangSmith key powers tracing *and* the models, no separate provider key — by
+setting two env vars:
 
 ```
-ANTHROPIC_API_KEY=<your LangSmith key>
-ANTHROPIC_BASE_URL=https://gateway.smith.langchain.com   # your region's host
-THROUGHLINE_WORKER_MODEL=anthropic:anthropic/claude-haiku-4-5
-THROUGHLINE_EDITOR_MODEL=anthropic:anthropic/claude-sonnet-4-6
+ANTHROPIC_BASE_URL=https://gateway.smith.langchain.com/anthropic
+ANTHROPIC_API_KEY=<your LangSmith key>   # on Deployment, LANGSMITH_API_KEY is injected automatically
 ```
 
-Model ids are config-driven (see [models.py](src/throughline/models.py)); the
-gateway needs provider-prefixed ids like `anthropic/claude-…`. `TAVILY_API_KEY`
-still needs a real Tavily key — web search isn't gatewayed.
+Which models are used is **code config**, not env — edit `WORKER_MODEL` /
+`EDITOR_MODEL` in [models.py](src/throughline/models.py) (plain Anthropic names; the
+gateway accepts them via its `/anthropic` route). `TAVILY_API_KEY` still needs a
+real Tavily key — web search isn't gatewayed.
 
 **Schedule the weekly run** (once the deployment is live):
 

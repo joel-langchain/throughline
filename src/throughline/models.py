@@ -1,37 +1,60 @@
 """Model configuration.
 
-Model IDs are config-driven so a deployment can point them anywhere without a
-code change. `model` is the cheap, fast worker (researchers); `strong_model` is
-the more capable reasoner (the editor that clusters and synthesises).
+Swap models by editing `WORKER_MODEL` / `EDITOR_MODEL` below — plain Anthropic
+model names. `model` is the cheap, fast worker (researchers); `strong_model` is the
+stronger reasoner (the editor that clusters and synthesises).
 
-Defaults call Anthropic directly. To route through the LangSmith **LLM Gateway**
-instead — one LangSmith key, any provider's model, centrally traced and governed
-— set these in the environment (e.g. as deployment secrets):
-
-    ANTHROPIC_BASE_URL        the gateway host, e.g. https://gateway.smith.langchain.com
-    ANTHROPIC_API_KEY         your LangSmith API key (lsv2_...)
-    THROUGHLINE_WORKER_MODEL  anthropic:anthropic/claude-haiku-4-5
-    THROUGHLINE_EDITOR_MODEL  anthropic:anthropic/claude-sonnet-4-6
-
-Each value is a LangChain "<client>:<model-id>" spec. The part before the colon
-picks the client — `anthropic`, which reads ANTHROPIC_BASE_URL / ANTHROPIC_API_KEY
-from the environment — and the part after is the model id sent upstream. For the
-gateway that's a provider-prefixed id such as `anthropic/claude-sonnet-4-6` (the
-gateway can also front other providers, e.g. `openai/gpt-5.4-mini`).
+Model calls route through the LangSmith **LLM Gateway** when `ANTHROPIC_BASE_URL`
+is set: one LangSmith key powers both tracing and (via the gateway) the model, so
+no separate provider key is needed, and the gateway accepts the bare model names
+below via its `/anthropic` route. With no gateway configured it calls Anthropic
+directly with `ANTHROPIC_API_KEY`.
 """
 
 import os
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[2] / ".env", override=True)
 
-# Cheap worker for the many parallel research subagents.
-WORKER_MODEL = os.getenv("THROUGHLINE_WORKER_MODEL", "anthropic:claude-haiku-4-5")
-# Stronger reasoner for clustering topics and synthesising the final report.
-EDITOR_MODEL = os.getenv("THROUGHLINE_EDITOR_MODEL", "anthropic:claude-sonnet-4-6")
+ModelName = Literal["claude-haiku-4-5", "claude-sonnet-4-6"]
 
-model = init_chat_model(WORKER_MODEL)
-strong_model = init_chat_model(EDITOR_MODEL)
+# --- Swap models here -------------------------------------------------------
+# Cheap worker for the many parallel research subagents.
+WORKER_MODEL: ModelName = "claude-haiku-4-5"
+# Stronger reasoner for clustering topics and synthesising the final report.
+EDITOR_MODEL: ModelName = "claude-sonnet-4-6"
+
+
+def _gateway_kwargs() -> dict[str, str]:
+    """Resolve credentials/endpoint for the model client.
+
+    Authenticate with the single LangSmith key — LangSmith Deployment injects
+    `LANGSMITH_API_KEY` at run time, so it's readable here; `ANTHROPIC_API_KEY` and
+    `LANGSMITH_API_KEY_GATEWAY` are optional overrides. When `ANTHROPIC_BASE_URL`
+    is set, calls route through the gateway; otherwise they hit Anthropic directly.
+    """
+    key = (
+        os.environ.get("LANGSMITH_API_KEY_GATEWAY")
+        or os.environ.get("ANTHROPIC_API_KEY")
+        or os.environ.get("LANGSMITH_API_KEY")
+    )
+    kwargs: dict[str, str] = {}
+    if key:
+        kwargs["api_key"] = key
+    base_url = os.environ.get("ANTHROPIC_BASE_URL")
+    if base_url:
+        kwargs["base_url"] = base_url
+    return kwargs
+
+
+def build_model(model_name: ModelName):
+    """Build a chat model, routing through the LangSmith gateway when configured."""
+    return init_chat_model(f"anthropic:{model_name}", **_gateway_kwargs())
+
+
+model = build_model(WORKER_MODEL)
+strong_model = build_model(EDITOR_MODEL)
