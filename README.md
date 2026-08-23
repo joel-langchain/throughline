@@ -1,5 +1,7 @@
 # Throughline
 
+[![CI](https://github.com/joel-langchain/throughline/actions/workflows/ci.yml/badge.svg)](https://github.com/joel-langchain/throughline/actions/workflows/ci.yml)
+
 _Find the thread through the week's AI noise._
 
 A weekly AI-news agent. It reads across the week's writing and returns **one
