@@ -1,0 +1,66 @@
+name: CI
+
+# Lint and run the offline golden-eval gate on every push and pull request.
+# The gate scores the frozen golden set (a clean report plus one-defect-each
+# variants) with the deterministic, reference-free evaluators and fails if any
+# evaluator stops catching its defect or starts firing on a clean report. It is
+# fully offline — no LangSmith call, no API keys — so no secrets are needed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Golden-eval gate
+        run: uv run pytest -v
+
+  # Separate from the fast eval gate: catches a broken langgraph.json (bad graph
+  # path, missing dependency) before a deploy would fail on it. Needs the heavier
+  # langgraph-cli, so it runs on its own in parallel and never slows the gate.
+  # Config validation imports the graph but builds no models lazily, so it needs
+  # no API keys.
+  validate-deploy-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install deploy tooling
+        run: uv sync --group deploy
+
+      - name: Validate langgraph.json
+        run: uv run langgraph validate

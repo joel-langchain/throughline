@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "throughline": "./src/throughline/agent.py:agent"
+  },
+  "python_version": "3.12"
+}

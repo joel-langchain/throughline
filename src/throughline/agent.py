@@ -33,11 +33,14 @@ swaps to a persistent StoreBackend with no change to this agent.
 """
 
 import re
+from datetime import date
 
 from deepagents import FilesystemPermission, create_deep_agent
-from langchain.agents.middleware import InterruptOnConfig
+from deepagents.backends import CompositeBackend, StateBackend, StoreBackend
+from langchain.agents.middleware import InterruptOnConfig, after_agent, dynamic_prompt
 from langchain.agents.middleware.types import ToolCallRequest
 
+from throughline.citations import renumber as renumber_citations
 from throughline.config import (
     MAX_VERIFY_RETRIES,
     MIN_SOURCES,
@@ -453,7 +456,100 @@ report_review = {
 }
 
 
-def build_agent(checkpointer=None):
+# --- Persistent cross-week memory (deployment) -----------------------------
+
+# The one agent path whose contents must survive between runs: the coverage
+# ledger and the structured week record. Locally the runner mirrors this to
+# ./memory; on a deployment it is routed to a persistent Store instead (see
+# build_agent), with no change to the agent's prompt or paths.
+MEMORIES_PREFIX = "/memories/"
+
+
+def _memory_namespace(runtime: object) -> tuple[str, ...]:
+    """Store namespace for memory: one shared ledger for the whole app.
+
+    A fixed namespace (not per-thread or per-assistant) is deliberate — every
+    scheduled weekly run reads and extends the SAME cross-week memory, which is
+    exactly what makes the weeks build on each other.
+    """
+    return ("throughline", "memories")
+
+
+# --- Deterministic citation numbering, done in-graph -----------------------
+
+
+def renumber_report_in_files(files: dict | None) -> dict | None:
+    """Return a files-state update that renumbers the report, or None if N/A.
+
+    Pure and side-effect free so it can be unit-tested without running the agent.
+    Reads /output/report.md from filesystem state, assigns global 1..N citation
+    numbers (see citations.renumber), and returns ONLY the changed file — the
+    files channel merges by key, so the research archive and memory are untouched.
+    """
+    files = files or {}
+    fd = files.get(REPORT_PATH)
+    if not fd:
+        return None
+    body = fd["content"] if isinstance(fd, dict) else fd
+    if isinstance(body, list):
+        body = "\n".join(body)
+    new_body, _warnings = renumber_citations(body)
+    if new_body == body:
+        return None
+    return {"files": {REPORT_PATH: {"content": new_body, "encoding": "utf-8"}}}
+
+
+@after_agent
+def renumber_citations_middleware(state, runtime) -> dict | None:
+    """After the editor finishes, renumber the report's citations in-graph.
+
+    Numbering is deterministic host-style work, but running it INSIDE the graph
+    (rather than only in the local runner) means a headless / scheduled run
+    produces a finished, correctly-numbered report on its own — no post-processing
+    step outside the agent is required.
+    """
+    return renumber_report_in_files(state.get("files"))
+
+
+# --- Today's date, injected at run time ------------------------------------
+
+
+def _system_text(system_message: object) -> str:
+    """Coerce a system prompt (str, SystemMessage, or content blocks) to text."""
+    if system_message is None:
+        return ""
+    if isinstance(system_message, str):
+        return system_message
+    content = getattr(system_message, "content", system_message)
+    if isinstance(content, list):
+        parts = [
+            block if isinstance(block, str) else block.get("text", "")
+            for block in content
+            if isinstance(block, (str, dict))
+        ]
+        return "\n".join(p for p in parts if p)
+    return str(content)
+
+
+def append_todays_date(system_message: object, today: date | None = None) -> str:
+    """Return the system prompt with today's date appended.
+
+    The report title, the coverage ledger's week label, and this-week.json all key
+    off *today's* date, and a model does not know the wall-clock date on its own.
+    Supplying it here — rather than only in the local runner's prompt — means a
+    headless / scheduled run dates its report and memory correctly too, and local
+    and deployed runs get the date the exact same way.
+    """
+    day = today or date.today()
+    return f"{_system_text(system_message)}\n\nFor this run, today's date is {day:%Y-%m-%d}."
+
+
+@dynamic_prompt
+def todays_date_middleware(request) -> str:
+    return append_todays_date(request.system_message)
+
+
+def build_agent(checkpointer=None, *, persistent_memory=False, review=True):
     """Build the editor agent.
 
     The human-review interrupt needs a checkpointer to pause and resume, so the
@@ -461,16 +557,38 @@ def build_agent(checkpointer=None):
     below is built WITHOUT a checkpointer to stay deployment-safe (the platform
     injects its own persistence); pass a checkpointer only for local,
     interruptible runs.
+
+    ``persistent_memory`` swaps the ``/memories/`` path from ephemeral run state
+    to a persistent Store (via a CompositeBackend), so cross-week memory survives
+    between scheduled runs on a deployment. The store is supplied by the LangGraph
+    platform at run time; every other path stays in run state.
+
+    ``review`` keeps the opt-in human-review interrupt. A headless deployment sets
+    ``review=False`` so a risk-flagged report is auto-finalised rather than pausing
+    forever with no human to resume it (matching the documented unattended
+    default). Either way the report still goes through the risk checks and the
+    in-graph citation renumbering.
     """
+    backend = None
+    if persistent_memory:
+        backend = CompositeBackend(
+            default=StateBackend(),
+            routes={MEMORIES_PREFIX: StoreBackend(namespace=_memory_namespace)},
+        )
     return create_deep_agent(
         model=strong_model,
         tools=[scan_ai_week],
         system_prompt=EDITOR_PROMPT,
         subagents=[topic_researcher, citation_verifier, final_pass_reviewer],
         permissions=editor_permissions,
-        interrupt_on=report_review,
+        interrupt_on=report_review if review else None,
+        middleware=[todays_date_middleware, renumber_citations_middleware],
+        backend=backend,
         checkpointer=checkpointer,
     )
 
 
-agent = build_agent()
+# The deployable graph (see langgraph.json). Cross-week memory is persistent so a
+# scheduled run builds on the last, and review is off so an unattended run never
+# blocks. The platform supplies the checkpointer and store at run time.
+agent = build_agent(persistent_memory=True, review=False)

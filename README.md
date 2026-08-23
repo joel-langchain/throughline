@@ -108,6 +108,21 @@ overwritten. Each researcher's raw archive is mirrored under
 `output/research/<topic>/` so you can inspect what was quarantined.
 What the agent remembers between weeks lives in `memory/` (see below).
 
+## Tests
+
+```bash
+uv run pytest        # offline golden-eval gate + ruff-clean codebase
+uv run ruff check .  # lint
+```
+
+The golden-eval gate (`tests/test_golden_evals.py`) scores the frozen golden set
+with the deterministic evaluators and asserts the clean report passes everything
+while each planted defect is caught by exactly its target evaluator — no
+LangSmith, no API keys. The same suite runs in CI on every push and pull request
+(`.github/workflows/ci.yml`). The richer, LangSmith-tracked experiment
+(`uv run python -m evals.run_evals`) still exists for history and the LLM voice
+judge; it needs `LANGSMITH_API_KEY` and is not part of the offline gate.
+
 ## Memory & continuity
 
 Throughline remembers what it has already covered, so the weeks build on each
@@ -122,11 +137,68 @@ convention):
 - `memory/coverage.md` — the running ledger, one line per topic per week.
 - `memory/this-week.json` — a structured record of the latest week.
 
-Right now the runner persists these by mirroring `/memories/` to the local
-`memory/` folder either side of a run — deliberately simple. When the agent is
-deployed (see the roadmap), that same `/memories/` path swaps to a persistent
-`StoreBackend` and the local mirror goes away, with **no change** to the agent
-itself.
+Right now, for a **local** run, the runner persists these by mirroring
+`/memories/` to the local `memory/` folder either side of a run — deliberately
+simple. On a **deployment** that same `/memories/` path is instead routed to a
+persistent `StoreBackend` (via a `CompositeBackend`), so a scheduled run reads and
+extends the same ledger with no local disk and no mirror — and with **no change**
+to the agent's prompt or paths. The swap is a single build flag
+(`build_agent(persistent_memory=True)`); see [Deploying](#deploying-loop-3--the-event-loop).
+
+## Deploying (Loop 3 — the event loop)
+
+The repo is **deploy-ready** for [LangGraph Platform](https://langchain-ai.github.io/langgraph/cloud/)
+(LangSmith Deployment). The deployable graph is `throughline.agent:agent`,
+declared in [`langgraph.json`](langgraph.json). It differs from a local run in two
+deliberate ways, both handled in `build_agent`:
+
+- **Persistent memory** — `/memories/` is backed by the platform's Store, so weeks
+  build on each other across scheduled runs (see [Memory & continuity](#memory--continuity)).
+- **Unattended** — the human-review interrupt is off, so a risk-flagged report is
+  auto-finalised rather than pausing forever with no human to resume it. The risk
+  checks and the **in-graph citation renumbering** still run, so a headless run
+  produces a finished, correctly-numbered report on its own — no host
+  post-processing needed. (The same in-graph step means a local run no longer
+  renumbers host-side either; the report in state is already final.)
+- **Today's date is injected in-graph** — the report title, the coverage ledger's
+  week label, and `this-week.json` all key off the current date, which a model
+  doesn't know on its own. A middleware supplies it at run time, so a cron created
+  once still dates each week correctly. Local and deployed runs take the identical
+  input (`"Build this week's AI-news report."`) and get the date the same way.
+
+Once deployed, the graph is wrapped in the full LangGraph Server API — assistants,
+threads, runs, **crons**, and the Store — so scheduling is an API call, not
+infrastructure you build.
+
+**Validate the config** (no account needed):
+
+```bash
+uv sync --group deploy
+uv run langgraph validate      # checks langgraph.json + that the graph imports
+uv run langgraph dev           # optional: serve the same graph locally
+```
+
+**Deploy** — two routes:
+
+- **From the CLI** (quick bring-up): `uv run langgraph deploy` builds and ships the
+  image to LangSmith Deployment (authenticates with `LANGSMITH_API_KEY`; builds
+  remotely if you have no local Docker).
+- **From GitHub** (continuous deployment): connect this repo in LangSmith so it
+  auto-deploys on push to `main`. This is the route that links to the
+  [CI eval gate](#tests) — a change only reaches the deployment after the gate
+  passes. Preferred once the deployment exists. For the gate to actually *block* a
+  bad change, turn on branch protection for `main` in GitHub and require the CI
+  check; otherwise CD still auto-deploys, just without the gate enforced.
+
+Either way, set `ANTHROPIC_API_KEY` and `TAVILY_API_KEY` as deployment secrets.
+
+**Schedule the weekly run** (once the deployment is live):
+
+```bash
+export LANGGRAPH_DEPLOYMENT_URL="https://<your-deployment>.us.langgraph.app"
+export LANGSMITH_API_KEY="..."
+uv run python scripts/create_cron.py            # weekly, Mon 08:00 UTC
+```
 
 ## Shipped so far
 
@@ -134,6 +206,18 @@ Building in public, newest first. Ticked items in the roadmap below are done;
 the core that predates the roadmap is captured here too. Everything is a
 deliberately simple first cut and will be refined.
 
+- **Deploy-ready (Loop 3 groundwork)** — the agent can run headless on LangGraph
+  Platform: a `langgraph.json` manifest, cross-week memory swapped to a persistent
+  Store so scheduled runs build on each other, and citation numbering moved
+  *inside* the graph so an unattended run finalises its own report with no
+  host-side post-processing. A `scripts/create_cron.py` schedules the weekly run.
+  All that's left is the one-time platform connect. See
+  [Deploying](#deploying-loop-3--the-event-loop).
+- **CI eval gate** — a GitHub Actions workflow runs the golden set through the
+  deterministic evaluators on every push and pull request, offline (no LangSmith,
+  no secrets). It fails the build if any evaluator stops catching its planted
+  defect or starts firing on the clean report, so a change that quietly weakens
+  the evals can't merge. Lint (ruff) runs alongside it.
 - **Deterministic citation numbering** — the editor cites each claim by source
   URL and the runner assigns a global 1..N sequence, so every inline marker
   resolves to a source and every source is cited (numbering is host work, taken
@@ -203,15 +287,20 @@ Building this in public — rough order, not fixed. Contributions and ideas welc
 
 **Operations**
 
-- [ ] Deployment (LangSmith Deployment)
-- [ ] Scheduled weekly runs (cron)
+- [ ] Deployment (LangSmith Deployment) _(repo is deploy-ready: `langgraph.json`,
+  persistent-memory Store swap, and headless in-graph output — see
+  [Deploying](#deploying-loop-3--the-event-loop); the one-time platform connect is
+  the remaining step)_
+- [ ] Scheduled weekly runs (cron) _(cron-creation script ready in
+  `scripts/create_cron.py`; runs once the deployment is live)_
 - [x] Monitoring & tracing (LangSmith) _(tracing wired; dashboards/alerts to come)_
 - [ ] Cost controls — token budgets and per-run cost tracking
 - [ ] Resilience — retries, rate-limit handling, and graceful search failures
 
 **Foundations**
 
-- [ ] Automated tests + CI
+- [x] Automated tests + CI _(GitHub Actions runs the golden set through the
+  evaluators offline on every push/PR, plus ruff lint; blocks on regressions)_
 - [ ] Structured, typed outputs from researchers (not just free text)
 - [ ] Configurable scan seeds and topic count
 

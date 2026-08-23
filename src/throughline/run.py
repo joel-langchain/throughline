@@ -27,7 +27,6 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 
 from throughline.agent import build_agent, report_risk_signals
-from throughline.citations import renumber as renumber_citations
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "output"
@@ -214,7 +213,7 @@ def main(review: bool = False) -> None:
     OUT_DIR.mkdir(exist_ok=True)
     MEM_DIR.mkdir(exist_ok=True)
     today = date.today()
-    prompt = f"Build this week's AI-news report. Today is {today:%Y-%m-%d}."
+    prompt = "Build this week's AI-news report."
 
     tracing_status = _configure_tracing()
 
@@ -290,14 +289,10 @@ def main(review: bool = False) -> None:
     files = result.get("files", {})
     if "/output/report.md" not in files:
         raise SystemExit("Agent did not write /output/report.md — check the run above.")
-    # Numbering citations is deterministic host work, not the model's job: the
-    # editor cites by [[url]] and this pass assigns global 1..N and rebuilds the
-    # Sources list into a guaranteed 1:1 mapping. See citations.renumber.
-    report_body, citation_warnings = renumber_citations(_content(files["/output/report.md"]))
-    if citation_warnings:
-        print("\nCitation pass:")
-        for w in citation_warnings:
-            print(f"  ⚠ {w}")
+    # Citations are already renumbered in-graph by the agent's after_agent step
+    # (agent.renumber_citations_middleware), so the report in state is final —
+    # the same finished output a headless/scheduled run produces. Persist as-is.
+    report_body = _content(files["/output/report.md"])
 
     out_root = OUT_DIR.resolve()
     mem_root = MEM_DIR.resolve()

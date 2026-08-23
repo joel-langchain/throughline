@@ -27,7 +27,14 @@ viz = [
 
 [dependency-groups]
 dev = [
+    "pytest>=8",
     "ruff>=0.6",
+]
+# Deploy tooling (Loop 3): the LangGraph dev server for local platform testing and
+# the SDK for creating the weekly cron. Kept out of `dev` so CI stays lean.
+deploy = [
+    "langgraph-cli[inmem]",
+    "langgraph-sdk",
 ]
 
 [tool.setuptools.packages.find]
@@ -36,3 +43,9 @@ where = ["src"]
 [tool.ruff]
 lint.select = ["E", "F", "I", "UP"]
 lint.ignore = ["E501", "E402"]
+
+[tool.pytest.ini_options]
+# Put the project root on sys.path so the top-level `evals` package imports
+# under pytest (throughline is installed editable; evals is not a package dist).
+pythonpath = ["."]
+testpaths = ["tests"]

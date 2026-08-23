@@ -1,4 +1,9 @@
 .env
+*.pem
+*.key
+*.crt
+credentials.json
+.DS_Store
 .venv/
 __pycache__/
 *.egg-info/
@@ -13,4 +18,7 @@ post_history/
 
 # Live run visualiser — local demo tool, kept out of version control.
 viz/
+
+# LangGraph dev server local state (langgraph dev / langgraph-cli).
+.langgraph_api/
 
