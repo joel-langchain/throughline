@@ -56,3 +56,18 @@ def test_deliver_swallows_errors(monkeypatch) -> None:
     monkeypatch.setattr(delivery.urllib.request, "urlopen", _boom)
     # Never raises — a delivery failure must not break the run.
     assert delivery.deliver_report("# Report") is False
+
+
+def test_deliver_rejects_non_webhook_value(monkeypatch) -> None:
+    # The exact misconfig we hit: the whole `curl ...` command pasted as the value.
+    monkeypatch.setenv(
+        "SLACK_WEBHOOK_URL",
+        "curl -X POST -H 'Content-type: application/json' --data '{\"text\":\"hi\"}' "
+        "https://hooks.slack.com/services/T/B/x",
+    )
+
+    def _fail(*_a, **_k):
+        raise AssertionError("must not POST when the value isn't a bare webhook URL")
+
+    monkeypatch.setattr(delivery.urllib.request, "urlopen", _fail)
+    assert delivery.deliver_report("# Report") is False
