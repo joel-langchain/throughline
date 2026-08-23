@@ -368,3 +368,7 @@ _Next:_
   real filesystem. The runner copies files out of agent state with a
   path-traversal guard.
 - Web-search text is untrusted; keep that in mind before rendering it anywhere.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Take it, run it, build on it.
