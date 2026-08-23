@@ -6,6 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "throughline"
 version = "0.1.0"
 description = "A weekly AI-news agent: cluster the week's writing into topics, research each in parallel, synthesise one cited report."
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11,<3.14"
 dependencies = [
     "deepagents>=0.5.9",
