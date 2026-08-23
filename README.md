@@ -257,24 +257,36 @@ uv run python scripts/create_cron.py            # weekly, Mon 05:00 UTC
 
 ## Self-host on your own infra
 
-You don't have to use the managed platform. The graph runs as a standard
-LangGraph server, so you can build an image and run the whole stack yourself.
+Nothing here is locked to the managed platform. There are three ways to run it,
+with increasing infrastructure, and Redis/Postgres are a property of the serving
+layer, not of the agent:
 
-A `Dockerfile` and `docker-compose.yml` are committed here (generated with
+**1. Just the agent.** The graph is standard LangGraph (`langgraph` / `langchain`
+/ `deepagents`), so it is plain Python. `uv run python -m throughline.run` runs the
+whole thing end to end with **no Redis, no Postgres, and no LangSmith server** —
+just the deps and your API keys, persisting memory to local files. Drive it from
+your own script, cron, or function however you like.
+
+**2. Self-hosted server.** If you want the full serving layer around the graph (an
+API, a durable task queue, scheduled runs, and a shared store), run the committed
+`Dockerfile` + `docker-compose.yml` (generated with
 `uv run langgraph dockerfile Dockerfile --add-docker-compose`). The compose stack
-is the agent server plus the two services it needs: Postgres (persistence /
-memory store) and Redis (task queue).
+is the agent server plus the two services that layer needs: Postgres (the store)
+and Redis (the queue).
 
 ```bash
 cp .env.example .env      # add ANTHROPIC_API_KEY / TAVILY_API_KEY (+ SLACK_WEBHOOK_URL)
 docker compose up         # agent server on http://localhost:8123
 ```
 
-Two honest caveats: you then own that stack (Postgres, Redis, scaling, backups,
-uptime), and the server image needs a licence key (`LANGGRAPH_CLOUD_LICENSE_KEY`,
-or a LangSmith key) for production self-hosting. That trade — run and maintain the
-infrastructure yourself, or let the managed platform handle it — is the whole
-reason [Deploy your own](#deploy-your-own) exists.
+You then own that stack (scaling, backups, uptime), and the server image needs a
+licence key (`LANGGRAPH_CLOUD_LICENSE_KEY`, or a LangSmith key) for production
+self-hosting.
+
+**3. Managed.** Let [LangSmith Deployments](#deploy-your-own) run that same server
+for you. Same graph, none of the operational burden.
+
+Pick the point on that line that fits how much infrastructure you want to own.
 
 ## Roadmap
 
