@@ -18,6 +18,8 @@ from langgraph.types import Command
 
 from throughline.agent import topic_researcher
 from throughline.quarantine import (
+    FAILURES_DIR,
+    SOURCES_DIR,
     UNFILED,
     QuarantineSourcesMiddleware,
     archive_entry,
@@ -128,14 +130,36 @@ def test_follow_up_searches_add_to_the_archive_rather_than_replacing_it() -> Non
 # --- it never costs a search ------------------------------------------------
 
 
-def test_a_failed_search_is_not_archived_but_still_returned() -> None:
+def test_a_failed_search_is_filed_apart_from_the_evidence() -> None:
+    # A failure is not a source, so it must not reach the verifier's folder. It
+    # is still archived, because a researcher's tool calls are invisible from the
+    # editor's state: without this, a run could lose half its searches silently.
     failed = ToolMessage(
         content="search failed", tool_call_id="toolu_abc123", name="internet_search", status="error"
     )
     out = _middleware().wrap_tool_call(
         _request(query="q", research_folder="ai-agents"), lambda _r: failed
     )
-    assert out is failed, "an error result passes straight through, with no archive"
+
+    (path,) = out.update["files"]
+    assert f"/{FAILURES_DIR}/" in path, "a failed search belongs in the failures folder"
+    assert f"/{SOURCES_DIR}/" not in path, "a failure must never look like evidence"
+    assert out.update["messages"] == [failed], "the model still sees the real result"
+
+
+def test_a_search_that_returns_an_error_payload_is_also_filed_as_a_failure() -> None:
+    # internet_search returns an error dict rather than raising, so the failure
+    # arrives as a normal tool message carrying an "error" field.
+    errored = ToolMessage(
+        content='{"query": "q", "results": [], "error": "search failed (ConnectionError)"}',
+        tool_call_id="toolu_abc123",
+        name="internet_search",
+    )
+    out = _middleware().wrap_tool_call(
+        _request(query="q", research_folder="ai-agents"), lambda _r: errored
+    )
+    (path,) = out.update["files"]
+    assert f"/{FAILURES_DIR}/" in path
 
 
 def test_other_tools_are_left_alone() -> None:
