@@ -22,3 +22,8 @@ viz/
 # LangGraph dev server local state (langgraph dev / langgraph-cli).
 .langgraph_api/
 
+
+# Agent instruction files are local-only — this repo is public.
+CLAUDE.md
+AGENTS.md
+.claude/
