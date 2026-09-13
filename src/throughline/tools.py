@@ -146,8 +146,12 @@ def scan_ai_week(extra_query: str = "") -> str:
 
 
 @tool
-def internet_search(query: str, max_results: int = 8) -> dict:
+def internet_search(query: str, research_folder: str = "", max_results: int = 8) -> dict:
     """Search recent news for one topic in depth.
+
+    Pass `research_folder` — the folder you were assigned, e.g. "ai-agents" or
+    "/research/ai-agents". Every result is archived verbatim under that folder
+    automatically, so you never need to copy search output into a file yourself.
 
     Returns raw Tavily results (titles, URLs, content). Press-release / wire
     domains are removed before returning, and each remaining result carries a

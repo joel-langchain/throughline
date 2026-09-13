@@ -8,8 +8,8 @@ Architecture (deepagents editor + subagent team):
       │  tag each NEW vs DEVELOPING, drop pure repeats (cross-week dedup)
       │  delegate each kept topic in parallel via the task tool
       ├──► topic-researcher (cheap model, own tools + scoped disk)
-      │       search reputable sources, quarantine raw hits to
-      │       /research/<topic>/sources.md, return one cited summary
+      │       search reputable sources (raw hits are quarantined for it, in code,
+      │       to /research/<topic>/sources/), return one cited summary
       │       + a press-release verdict
       └──► ... one researcher per topic ...
       collect summaries, drop the ones that fail the quality gate,
@@ -55,6 +55,7 @@ from throughline.config import (
 )
 from throughline.delivery import deliver_report
 from throughline.models import model, strong_model
+from throughline.quarantine import QuarantineSourcesMiddleware
 from throughline.tools import internet_search, scan_ai_week
 
 # --- Today's date, injected at run time ------------------------------------
@@ -111,21 +112,23 @@ weekly report. You will be given a single topic and an assigned research folder.
 
 How to work:
 1. Use internet_search a few times to find what actually happened on this topic
-   this week: releases, results, primary papers, credible analysis. If a search
-   comes back with an `error` field and no results, the search itself failed —
-   run it again or rephrase it. Do not read a failed search as "no coverage".
-2. Save the COMPLETE, verbatim output of ALL your searches to a single file:
-   write_file("/research/<topic>/sources.md", ...). Paste results exactly as the
-   tool returned them — every title, URL, and content snippet. Do NOT summarise
-   or trim. This raw archive stays here so it never clutters the editor.
-3. Only then write your summary from what you found.
+   this week: releases, results, primary papers, credible analysis. ALWAYS pass
+   your assigned research folder as `research_folder`. If a search comes back
+   with an `error` field and no results, the search itself failed — run it again
+   or rephrase it. Do not read a failed search as "no coverage".
+2. Your searches are archived for you. Every result is written verbatim to
+   /research/<topic>/sources/ automatically, as the tool returned it. Do NOT
+   copy search output into a file yourself, and do NOT use write_file for
+   sources — it is already done, and a hand-written copy would only compete with
+   the real archive.
+3. Write your summary from what you found.
 
 FOLLOW-UP REQUESTS (a gap-closing re-dispatch):
 - If your task says specific claims were UNSUPPORTED in a previous pass, this is a
-  second look. FIRST read your existing /research/<topic>/sources.md, THEN run
-  additional searches aimed squarely at those flagged claims, THEN write the
-  COMBINED old + new results back to /research/<topic>/sources.md (keep the prior
-  sources, add the new ones — do not lose what was already there).
+  second look. FIRST list /research/<topic>/sources/ and read what you already
+  have, THEN run additional searches aimed squarely at those flagged claims. The
+  new results are archived alongside the old ones, so nothing is lost and you
+  need not rewrite anything.
 - Return an updated summary that keeps ONLY claims your sources actually support;
   correct or drop the ones you could not substantiate. Do not restate a claim you
   still cannot back.
@@ -152,7 +155,7 @@ Return ONLY this, as your reply:
   SOURCES:
     [1] <title> — <url>
     [2] ...
-Do not paste raw search dumps into your reply — those live in your files."""
+Do not paste raw search dumps into your reply — those live in your archive."""
 
 research_permissions = [
     FilesystemPermission(operations=["read", "write"], paths=["/research/**"], mode="allow"),
@@ -169,7 +172,10 @@ topic_researcher = {
     "tools": [internet_search],
     "model": model,
     "permissions": research_permissions,
-    "middleware": subagent_middleware,
+    # The quarantine middleware archives each search itself, so the evidence the
+    # verifier checks against is the tool's own output rather than the
+    # researcher's retelling of it.
+    "middleware": [*subagent_middleware, QuarantineSourcesMiddleware()],
 }
 
 
@@ -181,16 +187,19 @@ inline [n] citation markers. Your job is to decide whether each cited claim is
 actually supported by the quarantined source material — nothing else.
 
 How to work:
-1. Read /research/<topic>/sources.md — the researcher's complete, verbatim search
-   results for this topic. This is the ONLY evidence you may use. Do NOT search
-   the web and do NOT rely on outside knowledge.
+1. List /research/<topic>/sources/ and read EVERY file in it. Together they are
+   the researcher's complete, verbatim search results for this topic — one file
+   per search, written by the system exactly as the search tool returned it, not
+   by the researcher. This is the ONLY evidence you may use. Do NOT search the
+   web and do NOT rely on outside knowledge. If the folder is empty or missing,
+   say so: return FLAG with "no source archive to check against".
 2. Go through the summary claim by claim. For each sentence carrying a [n] marker,
-   check whether source [n] in sources.md actually substantiates it.
+   check whether source [n] in the archive actually substantiates it.
 3. Judge each cited claim:
    - SUPPORTED — the cited source states or clearly implies the claim.
    - UNSUPPORTED — the source does not back it, the [n] points to the wrong
      source, or the claim overstates what the source actually says.
-4. Two extra faithfulness checks, using ONLY sources.md:
+4. Two extra faithfulness checks, using ONLY the archive:
    - PROPER-NOUN / NUMBER FIDELITY: every model name, product name, organisation,
      person, and quantity in the summary must appear in the source material. Flag
      any that do not — a name or figure the sources never mention (e.g. a
@@ -331,7 +340,9 @@ Work in this order:
    prevent.
 4. For EACH topic you are keeping, delegate to the topic-researcher subagent
    using the task tool — fire them off IN PARALLEL. Tell each one its topic and
-   its assigned folder (/research/<topic>/). Do NOT research topics yourself.
+   its assigned folder (/research/<topic>/), telling it to pass that folder as
+   `research_folder` on every search. Use a short, slug-like topic name (lowercase,
+   hyphens, no spaces) so the folder is stable. Do NOT research topics yourself.
 5. Collect the returned summaries. Apply the QUALITY GATE: drop any topic whose
    verdict is SKIP (failed source quality or was just a reworded press release).
    If a task call returns an error instead of a reply, that subagent failed and
