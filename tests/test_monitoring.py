@@ -108,7 +108,25 @@ def test_archiving_is_fine_when_sources_were_written() -> None:
 
 
 def test_a_run_that_never_researched_is_not_blamed_for_an_empty_archive() -> None:
-    assert _by_key(health_signals(_files(sources=0), [], None))["source_archive_ok"]["score"] == 1.0
+    signal = _by_key(health_signals(_files(sources=0), [], None))["source_archive_ok"]
+    assert signal["score"] == 1.0
+    # The comment has to agree with the score. A healthy run carrying an alarming
+    # line sends someone chasing a problem that is not there.
+    assert "NO sources archived" not in signal["comment"]
+    assert "no research in this run" in signal["comment"]
+
+
+def test_every_signal_comment_agrees_with_its_score() -> None:
+    # Guards the whole set against the score/comment mismatch above: a passing
+    # signal must not read like a failing one.
+    alarming = ("NO ", "not delivered", "no usable report")
+    healthy_state = {"files": _files(), "messages": [_task('{"topic": "a", "verdict": "KEEP"}')]}
+    for signal in run_signals(healthy_state, REPORT, delivered=True):
+        if signal["score"] > 0:
+            assert not any(word in signal["comment"] for word in alarming), (
+                f"{signal['key']} scored {signal['score']} but reads as a failure: "
+                f"{signal['comment']}"
+            )
 
 
 # --- searches and delegations that failed -----------------------------------

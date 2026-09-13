@@ -171,14 +171,21 @@ def health_signals(files: dict | None, messages: list | None, delivered: bool | 
         ),
         Signal("topic_count", topics, f"{topics} topic section(s) in the report"),
         Signal("source_count", sources, f"{sources} distinct source(s) cited"),
+        # Zero archived sources WHILE research happened means the quarantine
+        # stopped working and the verifier has been checking nothing. Zero with no
+        # research at all is just a run that did none, so the comment has to
+        # distinguish them: an alarming line on a healthy run sends someone
+        # chasing a problem that isn't there.
         Signal(
             "source_archive_ok",
-            # Zero archived sources while research happened means the quarantine
-            # stopped working, and the verifier has been checking nothing.
             0.0 if (results and archived == 0) else 1.0,
             f"{archived} search result(s) archived"
             if archived
-            else "NO sources archived — the verifier had no evidence to check",
+            else (
+                "NO sources archived — the verifier had no evidence to check"
+                if results
+                else "no research in this run, so nothing to archive"
+            ),
         ),
         Signal(
             "search_failures",
