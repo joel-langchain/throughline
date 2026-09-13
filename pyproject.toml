@@ -10,7 +10,10 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11,<3.14"
 dependencies = [
-    "deepagents>=0.5.9",
+    # Bounded so a redeploy installs the same minor the tests ran against. The
+    # platform builds from this file, not uv.lock, so an open floor meant every
+    # deploy picked up whatever deepagents was latest that day.
+    "deepagents>=0.7.13,<0.8",
     "langchain>=1.0.0,<2.0",
     "langchain-anthropic",
     "langgraph>=1.0.0,<2.0",

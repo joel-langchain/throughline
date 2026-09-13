@@ -15,8 +15,12 @@ from throughline.agent import (
     REPORT_PATH,
     append_todays_date,
     build_agent,
+    citation_verifier,
+    final_pass_reviewer,
     renumber_citations_middleware,
     renumber_report_in_files,
+    todays_date_middleware,
+    topic_researcher,
 )
 
 # A report written to the editor's [[url]] citation contract, not yet numbered.
@@ -88,3 +92,12 @@ def test_todays_date_handles_system_message_content_blocks() -> None:
     out = append_todays_date(_Msg(), today=date(2026, 1, 5))
     assert "BASE" in out
     assert "2026-01-05" in out
+
+
+def test_every_subagent_gets_todays_date_too() -> None:
+    # Only the editor used to carry the date middleware; a researcher left to
+    # guess the year searched for "... solution 2024" in September 2026.
+    for spec in (topic_researcher, citation_verifier, final_pass_reviewer):
+        assert todays_date_middleware in spec.get("middleware", []), (
+            f"{spec['name']} is missing the date middleware"
+        )
