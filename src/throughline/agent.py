@@ -57,6 +57,53 @@ from throughline.delivery import deliver_report
 from throughline.models import model, strong_model
 from throughline.tools import internet_search, scan_ai_week
 
+# --- Today's date, injected at run time ------------------------------------
+
+# Defined before the subagent specs because every agent in the system gets it:
+# the editor AND each subagent. A model does not know the wall-clock date on its
+# own, and a researcher left to guess searched for "... solution 2024" in 2026.
+
+
+def _system_text(system_message: object) -> str:
+    """Coerce a system prompt (str, SystemMessage, or content blocks) to text."""
+    if system_message is None:
+        return ""
+    if isinstance(system_message, str):
+        return system_message
+    content = getattr(system_message, "content", system_message)
+    if isinstance(content, list):
+        parts = [
+            block if isinstance(block, str) else block.get("text", "")
+            for block in content
+            if isinstance(block, (str, dict))
+        ]
+        return "\n".join(p for p in parts if p)
+    return str(content)
+
+
+def append_todays_date(system_message: object, today: date | None = None) -> str:
+    """Return the system prompt with today's date appended.
+
+    The report title, the coverage ledger's week label, and this-week.json all key
+    off *today's* date, and the researchers' search queries do too. Supplying it
+    here — rather than only in the local runner's prompt — means a headless /
+    scheduled run dates its report, memory, and searches correctly, and local and
+    deployed runs get the date the exact same way.
+    """
+    day = today or date.today()
+    return f"{_system_text(system_message)}\n\nFor this run, today's date is {day:%Y-%m-%d}."
+
+
+@dynamic_prompt
+def todays_date_middleware(request) -> str:
+    return append_todays_date(request.system_message)
+
+
+# Attached to every subagent spec below, so the researcher, verifier, and reviewer
+# know the date as well as the editor does.
+subagent_middleware = [todays_date_middleware]
+
+
 # --- The research subagent -------------------------------------------------
 
 RESEARCHER_PROMPT = """You are an AI-news analyst researching ONE topic for a
@@ -122,6 +169,7 @@ topic_researcher = {
     "tools": [internet_search],
     "model": model,
     "permissions": research_permissions,
+    "middleware": subagent_middleware,
 }
 
 
@@ -179,6 +227,7 @@ citation_verifier = {
     "tools": [],
     "model": model,
     "permissions": verifier_permissions,
+    "middleware": subagent_middleware,
 }
 
 
@@ -244,6 +293,7 @@ final_pass_reviewer = {
     "tools": [],
     "model": model,
     "permissions": final_pass_permissions,
+    "middleware": subagent_middleware,
 }
 
 
@@ -561,44 +611,6 @@ def renumber_citations_middleware(state, runtime) -> dict | None:
     if final_body:
         deliver_report(final_body)
     return update
-
-
-# --- Today's date, injected at run time ------------------------------------
-
-
-def _system_text(system_message: object) -> str:
-    """Coerce a system prompt (str, SystemMessage, or content blocks) to text."""
-    if system_message is None:
-        return ""
-    if isinstance(system_message, str):
-        return system_message
-    content = getattr(system_message, "content", system_message)
-    if isinstance(content, list):
-        parts = [
-            block if isinstance(block, str) else block.get("text", "")
-            for block in content
-            if isinstance(block, (str, dict))
-        ]
-        return "\n".join(p for p in parts if p)
-    return str(content)
-
-
-def append_todays_date(system_message: object, today: date | None = None) -> str:
-    """Return the system prompt with today's date appended.
-
-    The report title, the coverage ledger's week label, and this-week.json all key
-    off *today's* date, and a model does not know the wall-clock date on its own.
-    Supplying it here — rather than only in the local runner's prompt — means a
-    headless / scheduled run dates its report and memory correctly too, and local
-    and deployed runs get the date the exact same way.
-    """
-    day = today or date.today()
-    return f"{_system_text(system_message)}\n\nFor this run, today's date is {day:%Y-%m-%d}."
-
-
-@dynamic_prompt
-def todays_date_middleware(request) -> str:
-    return append_todays_date(request.system_message)
 
 
 def build_agent(checkpointer=None, *, persistent_memory=False, review=True):
