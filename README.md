@@ -31,7 +31,10 @@ It's worth designing for all four from the start, even the ones you build later.
 The editor (a strong model) clusters the week's writing into the topics that
 emerge from the data, then delegates each to its own researcher **in parallel**,
 each in an **isolated context**. Bulky raw search text is quarantined in each
-researcher's scratch folder so it never floods the editor's context.
+researcher's scratch folder so it never floods the editor's context. The archive
+is written **by the host, not the model**: a middleware captures each search
+result exactly as the tool returned it, so the evidence the verifier checks is
+what the researcher actually saw rather than its retelling of it.
 
 ```mermaid
 flowchart TD
@@ -95,7 +98,9 @@ Once researchers report back, the editor drops the `SKIP`s (the quality gate),
 then each kept topic is checked before it can reach the report:
 
 - **Citation verification** — a verifier subagent checks each kept topic's claims
-  against its quarantined sources. On a `FLAG`, it re-dispatches the researcher to
+  against its quarantined sources — one file per search, captured verbatim in
+  code so a claim is checked against the real source text. On a `FLAG`, it
+  re-dispatches the researcher to
   close the gap and re-verifies (a bounded re-research loop); any claim that still
   can't be backed is dropped.
 - **Final-pass review** — a reviewer reads the assembled report end to end and
@@ -338,9 +343,12 @@ _Done:_
 - [x] Human-in-the-loop review on risk signals
 - [x] Deterministic in-graph citation numbering
 - [x] Final-pass reviewer over the whole report
+- [x] Verbatim source capture in code — the archive the verifier reads is the
+  search tool's own output, not the researcher's paraphrase of it
 
 _Next:_
 
+- [ ] Structured, typed researcher outputs (so the editor stops parsing free text)
 - [ ] Source-level dedup (not just topic-level)
 - [ ] Stronger source-tier enforcement (prefer primary / top-tier outlets)
 
