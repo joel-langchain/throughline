@@ -131,10 +131,15 @@ handled in `build_agent` — the prompt and paths stay identical:
   need the current date, which a model doesn't know. A middleware supplies it at
   run time, so a cron created once dates each week correctly.
 
-**Delivery.** Each finished run posts the report to Slack when `SLACK_WEBHOOK_URL`
-is set — so a scheduled run lands somewhere readable without a laptop. It also
-lands in the run's LangSmith trace. See [Deploy your own](#deploy-your-own) to set
-it up.
+**Delivery.** Each finished run posts the report to Slack when Slack is configured
+— so a scheduled run lands somewhere readable without a laptop. With a bot token
+it posts a **short summary to the channel** (title, the week's lede, the ranked
+headlines, and the source count) and the **full report in that message's thread**,
+so a channel other people are in gets one skimmable post a week and the discussion
+stays attached to it. Link unfurling is off: a report cites twenty-plus sources,
+and expanding them would bury the text and render untrusted web-search content
+into the channel. The report also lands in the run's LangSmith trace. See
+[Deploy your own](#deploy-your-own) to set it up.
 
 ---
 
@@ -240,8 +245,20 @@ Which models are used is **code config**, not env — edit `WORKER_MODEL` /
 `EDITOR_MODEL` in [models.py](src/throughline/models.py). `TAVILY_API_KEY` still
 needs a real Tavily key — web search isn't gatewayed.
 
-**Deliver to Slack** (optional). Add a Slack incoming-webhook URL as a deployment
-secret and each finished run posts the report to that channel:
+**Deliver to Slack** (optional). Add these as deployment secrets and each finished
+run posts a summary to the channel with the full report in its thread:
+
+```
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_CHANNEL_ID=C0XXXXXXXXX
+```
+
+That needs a Slack app with the `chat:write` scope, installed to the workspace,
+and the bot invited to the channel (`/invite @YourApp`). The channel ID is in the
+channel's URL, or under **View channel details**.
+
+An incoming webhook still works as a fallback and is used when no bot token is
+set, but it posts the whole report as one message and cannot thread:
 
 ```
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/XXX/YYY/ZZZ
@@ -336,10 +353,14 @@ _Done:_
 - [x] Headless in-graph output
 - [x] Scheduled weekly cron
 - [x] Slack delivery
+- [x] Slack summary (lede + ranked headlines) with the full report in-thread
+- [x] Resilience — search transport retries (incl. 429/5xx), searches that fail
+  return an error instead of raising, and a failed subagent is retried once then
+  dropped rather than killing the run
 
 _Next:_
 
-- [ ] Report format — TL;DR + ranked headlines up top for fast reading
+- [ ] Same TL;DR + ranked headlines at the top of `report.md` itself, not just Slack
 - [ ] More output formats (social teaser, email digest)
 - [ ] LinkedIn posting via MCP (draft → review → post)
 - [ ] Cost controls — token budgets and per-run cost tracking
@@ -352,9 +373,6 @@ _Done:_
 - [x] Automated tests + CI gate (blocks regressions; auto-merge on green)
 - [x] End-to-end tracing
 
-- [x] Resilience — search transport retries (incl. 429/5xx), searches that fail
-  return an error instead of raising, and a failed subagent is retried once then
-  dropped rather than killing the run
 _Next:_
 
 - [ ] Online evaluators scoring production runs as usage grows

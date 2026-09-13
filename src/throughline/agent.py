@@ -601,8 +601,8 @@ def renumber_citations_middleware(state, runtime) -> dict | None:
 
     Renumbering (deterministic host-style work, run INSIDE the graph) makes a
     headless / scheduled run's report final on its own. Delivery then pushes that
-    finished report to Slack when SLACK_WEBHOOK_URL is set — a no-op otherwise — so
-    a scheduled run lands somewhere readable without a laptop. Delivery is
+    finished report to Slack when Slack is configured — a no-op otherwise — so a
+    scheduled run lands somewhere readable without a laptop. Delivery is
     best-effort and never breaks the run or drops the report from state.
     """
     files = state.get("files")
