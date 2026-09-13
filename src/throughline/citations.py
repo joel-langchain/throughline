@@ -73,6 +73,17 @@ def _metadata_map(sources_block: str) -> dict[str, str]:
     return meta
 
 
+def source_count(report: str) -> int:
+    """How many sources the finished report lists (0 if it has no Sources section).
+
+    Exposed for delivery, which quotes the count in the Slack summary as a cheap
+    signal of how well-sourced the week is. Counts Sources lines carrying a URL,
+    so a heading or a stray blank line is not mistaken for a source.
+    """
+    _body, _heading, sources_block = _split_sources(report)
+    return sum(1 for line in sources_block.splitlines() if _URL.search(line))
+
+
 def renumber(report: str) -> tuple[str, list[str]]:
     """Assign global 1..N citation numbers deterministically. Returns (report, warnings).
 
