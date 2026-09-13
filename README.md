@@ -333,7 +333,6 @@ _Next:_
 
 - [ ] Configurable scan seeds and topic count
 - [ ] More reliable topic selection — consistently surface the week's biggest stories
-- [ ] Structured, typed researcher outputs (not just free text)
 
 ### Loop 2 · Verification
 
@@ -345,10 +344,11 @@ _Done:_
 - [x] Final-pass reviewer over the whole report
 - [x] Verbatim source capture in code — the archive the verifier reads is the
   search tool's own output, not the researcher's paraphrase of it
+- [x] Structured, typed subagent outputs — researcher, verifier, and reviewer
+  return validated JSON, so a verdict cannot be a mis-parsed line of prose
 
 _Next:_
 
-- [ ] Structured, typed researcher outputs (so the editor stops parsing free text)
 - [ ] Source-level dedup (not just topic-level)
 - [ ] Stronger source-tier enforcement (prefer primary / top-tier outlets)
 
