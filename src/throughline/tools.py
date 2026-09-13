@@ -3,12 +3,21 @@
 `scan_ai_week` casts a wide net so topics can *emerge* from what people are
 actually writing about this week. `internet_search` is the researchers' tool for
 going deep on a single topic.
+
+Both tools are built to degrade, not crash. A search is a network call to a
+third party, and a scheduled run has nobody watching it: one dropped connection
+must cost a researcher one search result, not the week's report. So the Tavily
+session retries transient transport failures itself, and neither tool lets an
+exception escape into the graph — a failed search comes back as an empty result
+with an `error` the model can read and act on.
 """
 
 import os
 from urllib.parse import urlparse
 
 from langchain_core.tools import tool
+from requests import Session
+from requests.adapters import HTTPAdapter, Retry
 from tavily import TavilyClient
 
 from throughline.config import (
@@ -22,6 +31,33 @@ from throughline.config import (
 )
 
 _tavily: TavilyClient | None = None
+
+# Transport-level retries for the Tavily session. The client keeps a pooled
+# keep-alive connection open between calls; in a long-lived deployment that
+# connection can be closed by the far end while idle, and the next request then
+# fails with "Remote end closed connection without response". `requests` does
+# not retry at all by default, and urllib3's default retry policy excludes POST
+# (which Tavily's search endpoint is), so that exact failure used to surface as
+# a hard ConnectionError. This policy retries POSTs on connection/read errors and
+# on 429/5xx, with a short backoff (first retry is immediate, then 1s, then 2s).
+# `raise_on_status=False` hands a final non-2xx response back to the Tavily
+# client so its own typed errors (invalid key, usage limit) still fire.
+_RETRY_POLICY = Retry(
+    total=3,
+    backoff_factor=0.5,
+    status_forcelist=(429, 500, 502, 503, 504),
+    allowed_methods=frozenset({"POST"}),
+    raise_on_status=False,
+)
+
+
+def _retrying_session() -> Session:
+    """A requests session that retries transient failures against Tavily."""
+    session = Session()
+    adapter = HTTPAdapter(max_retries=_RETRY_POLICY)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
 
 
 def _client() -> TavilyClient:
@@ -39,8 +75,14 @@ def _client() -> TavilyClient:
             raise RuntimeError(
                 "TAVILY_API_KEY is required. Copy .env.example to .env and fill it in."
             )
-        _tavily = TavilyClient(api_key=api_key)
+        _tavily = TavilyClient(api_key=api_key, session=_retrying_session())
     return _tavily
+
+
+def _search(query: str, max_results: int) -> dict:
+    """One recent-news search; the single place both tools call Tavily from."""
+    return _client().search(query, max_results=max_results, topic="news", days=7)
+
 
 # Legitimacy is enforced deterministically, not left to the model's judgement.
 # The trust lists (deny/allow domains) and discovery seeds now live in
@@ -82,7 +124,7 @@ def scan_ai_week(extra_query: str = "") -> str:
     lines: list[str] = []
     for seed in seeds:
         try:
-            res = _client().search(seed, max_results=6, topic="news", days=7)
+            res = _search(seed, max_results=6)
         except Exception as exc:  # keep scanning even if one seed fails
             lines.append(f"[search failed for '{seed}': {exc}]")
             continue
@@ -112,8 +154,23 @@ def internet_search(query: str, max_results: int = 8) -> dict:
     `source_quality` of "reputable" or "unverified". Prefer independent,
     reputable sources — researchers, analysts, primary papers — over vendor
     marketing blogs.
+
+    If the search itself fails (network or provider error), the result has an
+    empty `results` list and an `error` field describing what went wrong. That
+    is not a signal that nothing was published — run the search again, or try a
+    rephrased query, before concluding a topic has no coverage.
     """
-    res = _client().search(query, max_results=max_results, topic="news", days=7)
+    try:
+        res = _search(query, max_results=max_results)
+    except Exception as exc:  # a failed search is a result, never a crash
+        return {
+            "query": query,
+            "results": [],
+            "error": (
+                f"search failed ({type(exc).__name__}: {exc}). "
+                "Retry this query or try a rephrased one."
+            ),
+        }
     kept = []
     for item in res.get("results", []):
         url = item.get("url", "")

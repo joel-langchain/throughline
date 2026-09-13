@@ -342,7 +342,6 @@ _Next:_
 - [ ] Report format — TL;DR + ranked headlines up top for fast reading
 - [ ] More output formats (social teaser, email digest)
 - [ ] LinkedIn posting via MCP (draft → review → post)
-- [ ] Resilience — retries, rate-limit handling, graceful search failures
 - [ ] Cost controls — token budgets and per-run cost tracking
 
 ### Loop 4 · Improvement
@@ -353,6 +352,9 @@ _Done:_
 - [x] Automated tests + CI gate (blocks regressions; auto-merge on green)
 - [x] End-to-end tracing
 
+- [x] Resilience — search transport retries (incl. 429/5xx), searches that fail
+  return an error instead of raising, and a failed subagent is retried once then
+  dropped rather than killing the run
 _Next:_
 
 - [ ] Online evaluators scoring production runs as usage grows

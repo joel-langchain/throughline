@@ -37,7 +37,12 @@ from datetime import date
 
 from deepagents import FilesystemPermission, create_deep_agent
 from deepagents.backends import CompositeBackend, StateBackend, StoreBackend
-from langchain.agents.middleware import InterruptOnConfig, after_agent, dynamic_prompt
+from langchain.agents.middleware import (
+    InterruptOnConfig,
+    ToolRetryMiddleware,
+    after_agent,
+    dynamic_prompt,
+)
 from langchain.agents.middleware.types import ToolCallRequest
 
 from throughline.citations import renumber as renumber_citations
@@ -59,7 +64,9 @@ weekly report. You will be given a single topic and an assigned research folder.
 
 How to work:
 1. Use internet_search a few times to find what actually happened on this topic
-   this week: releases, results, primary papers, credible analysis.
+   this week: releases, results, primary papers, credible analysis. If a search
+   comes back with an `error` field and no results, the search itself failed —
+   run it again or rephrase it. Do not read a failed search as "no coverage".
 2. Save the COMPLETE, verbatim output of ALL your searches to a single file:
    write_file("/research/<topic>/sources.md", ...). Paste results exactly as the
    tool returned them — every title, URL, and content snippet. Do NOT summarise
@@ -277,6 +284,11 @@ Work in this order:
    its assigned folder (/research/<topic>/). Do NOT research topics yourself.
 5. Collect the returned summaries. Apply the QUALITY GATE: drop any topic whose
    verdict is SKIP (failed source quality or was just a reworded press release).
+   If a task call returns an error instead of a reply, that subagent failed and
+   has already been retried once for you: drop that topic and carry on. The same
+   goes for a failed verifier later (drop the topic) or a failed final-pass
+   reviewer (publish without the pass). One failed delegation must never stop
+   the report.
 6. VERIFY CITATIONS (the verification loop). For EACH kept topic:
    a) Delegate to the citation-verifier subagent via the task tool. Give it the
       topic, its research folder (/research/<topic>/), and the researcher's
@@ -379,6 +391,34 @@ editor_permissions = [
     FilesystemPermission(operations=["read", "write"], paths=["/memories/**"], mode="allow"),
     FilesystemPermission(operations=["write"], paths=["/research/**"], mode="deny"),
 ]
+
+
+# --- One failed delegation must not kill the run ----------------------------
+
+# A subagent runs as a `task` tool call, and a tool call that raises is fatal to
+# the whole graph by default: the exception climbs from the subagent's tool node
+# through `task` into the editor's tool node and ends the run. That is what took
+# out a scheduled week — one dropped connection inside one researcher's search.
+# The search tools now swallow their own failures (see tools.py); this guard is
+# the outer net for anything else a subagent can die of (model errors, timeouts):
+# re-run the delegation once, and if it fails again hand the editor an error
+# message it can act on (drop the topic, carry on) instead of raising.
+
+
+def _task_failure_message(exc: Exception) -> str:
+    """The editor-facing text for a delegation that failed twice."""
+    return (
+        f"The subagent for this task failed twice ({type(exc).__name__}: {exc}). "
+        "Do not retry it again. Drop this topic (or skip this review step) and carry "
+        "on with the rest of the report."
+    )
+
+
+task_failure_guard = ToolRetryMiddleware(
+    max_retries=1,
+    tools=["task"],
+    on_failure=_task_failure_message,
+)
 
 
 # --- Human review before the report is finalised ---------------------------
@@ -594,7 +634,7 @@ def build_agent(checkpointer=None, *, persistent_memory=False, review=True):
         subagents=[topic_researcher, citation_verifier, final_pass_reviewer],
         permissions=editor_permissions,
         interrupt_on=report_review if review else None,
-        middleware=[todays_date_middleware, renumber_citations_middleware],
+        middleware=[todays_date_middleware, task_failure_guard, renumber_citations_middleware],
         backend=backend,
         checkpointer=checkpointer,
     )
