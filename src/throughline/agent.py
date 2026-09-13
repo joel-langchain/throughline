@@ -56,6 +56,7 @@ from throughline.config import (
 from throughline.delivery import deliver_report
 from throughline.models import model, strong_model
 from throughline.quarantine import QuarantineSourcesMiddleware
+from throughline.schemas import FinalPassResult, ResearchResult, VerificationResult
 from throughline.tools import internet_search, scan_ai_week
 
 # --- Today's date, injected at run time ------------------------------------
@@ -147,14 +148,11 @@ PRESS-RELEASE CHECK (rule 2 — hard requirement):
   release or announcement with no independent reporting or analysis, do NOT
   fabricate significance. Say so.
 
-Return ONLY this, as your reply:
-  TOPIC: <topic>
-  VERDICT: KEEP | SKIP        # SKIP if it fails rule 1 or 2
-  REASON: <one line — why keep or skip>
-  SUMMARY: <120-180 words, factual, with inline [n] citation markers>
-  SOURCES:
-    [1] <title> — <url>
-    [2] ...
+YOUR REPLY:
+Return the structured result you have been given a schema for: the topic, a
+KEEP/SKIP verdict, a one-line reason, your summary, and the sources behind it.
+The summary's [n] markers key to the sources list in order — [1] is the first
+source you list, [2] the second. Cite the URL exactly as the search returned it.
 Do not paste raw search dumps into your reply — those live in your archive."""
 
 research_permissions = [
@@ -176,6 +174,9 @@ topic_researcher = {
     # verifier checks against is the tool's own output rather than the
     # researcher's retelling of it.
     "middleware": [*subagent_middleware, QuarantineSourcesMiddleware()],
+    # The verdict gates whether a topic reaches the report, so it is a typed
+    # field the model must fill, not a header the editor has to parse.
+    "response_format": ResearchResult,
 }
 
 
@@ -211,13 +212,13 @@ How to work:
      is an overstatement — flag it as UNSUPPORTED so the editor can attribute it
      evenly.
 
-Return ONLY this, as your reply:
-  TOPIC: <topic>
-  VERDICT: PASS | FLAG        # FLAG if ANY cited claim is UNSUPPORTED
-  UNSUPPORTED:
-    - "<exact claim text>" [n] — <one line: what source [n] actually says>
-    - ...                       # leave empty when VERDICT is PASS
-Keep it terse. Do NOT rewrite the summary — only report what is not supported."""
+YOUR REPLY:
+Return the structured result you have been given a schema for: the topic, a
+PASS/FLAG verdict, and the unsupported claims. FLAG if ANY cited claim is
+unsupported. Quote each unsupported claim exactly, give the [n] it carried, and
+say in one line what that source actually says instead. Leave the list empty when
+the verdict is PASS. Do NOT rewrite the summary — only report what is not
+supported."""
 
 verifier_permissions = [
     # Read-only: the verifier checks claims against the quarantined sources and
@@ -237,6 +238,7 @@ citation_verifier = {
     "model": model,
     "permissions": verifier_permissions,
     "middleware": subagent_middleware,
+    "response_format": VerificationResult,
 }
 
 
@@ -274,15 +276,12 @@ How to work:
    - PRECISION: flag a count given as a range for a single quantity, and a
      comparative (e.g. "100x cheaper") stated without the unit it is measured in.
 
-Return ONLY this, as your reply:
-  VERDICT: APPROVE | REVISE
-  ISSUES:
-    - <one line: a concrete, fixable problem with the assembled report>
-    - ...                       # leave empty when VERDICT is APPROVE
-  NOTE: <one line — overall read on whether this is ready to publish>
+YOUR REPLY:
+Return the structured result you have been given a schema for: an APPROVE/REVISE
+verdict, the issues, and a one-line note on whether this is ready to publish.
 Report REVISE only for real whole-report problems the editor can fix by editing
-/output/report.md; do not nitpick wording. Keep it terse and do not rewrite the
-report yourself."""
+/output/report.md; do not nitpick wording. Leave the issues empty when the verdict
+is APPROVE, and do not rewrite the report yourself."""
 
 final_pass_permissions = [
     # Read-only on the finished report; the reviewer returns a verdict in its
@@ -303,6 +302,7 @@ final_pass_reviewer = {
     "model": model,
     "permissions": final_pass_permissions,
     "middleware": subagent_middleware,
+    "response_format": FinalPassResult,
 }
 
 
@@ -343,8 +343,11 @@ Work in this order:
    its assigned folder (/research/<topic>/), telling it to pass that folder as
    `research_folder` on every search. Use a short, slug-like topic name (lowercase,
    hyphens, no spaces) so the folder is stable. Do NOT research topics yourself.
-5. Collect the returned summaries. Apply the QUALITY GATE: drop any topic whose
-   verdict is SKIP (failed source quality or was just a reworded press release).
+5. Collect the returned summaries. Each researcher replies with a JSON object:
+   {"topic", "verdict", "reason", "summary", "sources": [{"title", "url"}, ...]}.
+   Read those fields directly — do not re-parse the summary text for a verdict.
+   Apply the QUALITY GATE: drop any topic whose verdict is SKIP (failed source
+   quality or was just a reworded press release).
    If a task call returns an error instead of a reply, that subagent failed and
    has already been retried once for you: drop that topic and carry on. The same
    goes for a failed verifier later (drop the topic) or a failed final-pass
@@ -353,12 +356,14 @@ Work in this order:
 6. VERIFY CITATIONS (the verification loop). For EACH kept topic:
    a) Delegate to the citation-verifier subagent via the task tool. Give it the
       topic, its research folder (/research/<topic>/), and the researcher's
-      summary. It reads ONLY the quarantined sources and returns PASS or FLAG
-      with the unsupported claims.
-   b) If PASS, keep the topic as researched.
-   c) If FLAG, GO AGAIN: re-dispatch the SAME topic to the topic-researcher via
-      the task tool, telling it EXACTLY which claims were unsupported and to find
-      independent support for them (or correct/remove them). Then re-verify the
+      summary WITH its numbered sources, so it knows what each [n] refers to. It
+      reads ONLY the quarantined sources and replies with a JSON object:
+      {"topic", "verdict", "unsupported": [{"claim", "citation",
+      "what_the_source_says"}, ...]}.
+   b) If the verdict is PASS, keep the topic as researched.
+   c) If it is FLAG, GO AGAIN: re-dispatch the SAME topic to the topic-researcher
+      via the task tool, quoting the `claim` of each unsupported entry and asking
+      for independent support (or a correction/removal). Then re-verify the
       updated summary by repeating step (a).
    d) STOP CONDITION: run this re-research + re-verify loop AT MOST
       <<MAX_VERIFY_RETRIES>> time(s) per topic. This cap is a HARD limit, not the
@@ -414,10 +419,11 @@ Work in this order:
    last week's edition; name it only if you explain it in one clause.
 8. FINAL PASS. After the report is written, delegate ONCE to the
    final-pass-reviewer subagent via the task tool. It reads the whole
-   /output/report.md end to end and returns APPROVE or REVISE on whether the
-   report holds together as one coherent piece (coherence, continuity,
-   consistency, completeness) — the last read-through before publishing.
-   - If APPROVE, proceed.
+   /output/report.md end to end and replies with a JSON object:
+   {"verdict", "issues": [...], "note"} on whether the report holds together as
+   one coherent piece (coherence, continuity, consistency, completeness) — the
+   last read-through before publishing.
+   - If the verdict is APPROVE, proceed.
    - If REVISE, fix the concrete issues it lists by editing /output/report.md
      (write the corrected report back to the same path), then delegate to the
      final-pass-reviewer ONE more time to confirm. Do this re-review AT MOST once;
