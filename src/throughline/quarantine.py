@@ -33,6 +33,12 @@ from langgraph.types import Command
 SEARCH_TOOL = "internet_search"
 RESEARCH_ROOT = "/research"
 SOURCES_DIR = "sources"
+# Failed searches are archived too, but in their own directory. The verifier
+# reads SOURCES_DIR only, so a failure never pollutes the evidence; keeping them
+# somewhere makes them countable from the finished run, which matters because a
+# researcher's own tool calls are invisible from the editor's isolated state —
+# a run can quietly lose half its searches and still look healthy from outside.
+FAILURES_DIR = "failed-searches"
 # Fallback folder for a search that arrives with no usable research folder, so a
 # stray call is still archived somewhere the verifier can find it.
 UNFILED = "unfiled"
@@ -61,8 +67,14 @@ def _folder(raw: object) -> str:
     return slugify(segment) or UNFILED
 
 
-def sources_path(research_folder: object, tool_call_id: object, query: object = "") -> str:
-    """Path for one search's archive: /research/<folder>/sources/<query>-<id>.md.
+def sources_path(
+    research_folder: object,
+    tool_call_id: object,
+    query: object = "",
+    *,
+    directory: str = SOURCES_DIR,
+) -> str:
+    """Path for one search's archive: /research/<folder>/<directory>/<query>-<id>.md.
 
     The tool-call id makes the path unique per call, which is what keeps
     concurrent searches from overwriting each other. The query slug is only there
@@ -71,7 +83,7 @@ def sources_path(research_folder: object, tool_call_id: object, query: object = 
     call_id = slugify(str(tool_call_id or ""), max_length=12) or "call"
     stem = slugify(str(query or ""), max_length=48)
     name = f"{stem}-{call_id}" if stem else call_id
-    return f"{RESEARCH_ROOT}/{_folder(research_folder)}/{SOURCES_DIR}/{name}.md"
+    return f"{RESEARCH_ROOT}/{_folder(research_folder)}/{directory}/{name}.md"
 
 
 def archive_entry(query: object, content: str) -> str:
@@ -112,14 +124,19 @@ class QuarantineSourcesMiddleware(AgentMiddleware):
         # another middleware already took the result over, so leave it alone.
         if not isinstance(result, ToolMessage):
             return result
-        if result.status == "error":
-            return result  # a failed search has no sources to quarantine
 
         args = request.tool_call.get("args") or {}
+        text = _message_text(result)
+        # A failed search is archived apart from the evidence: it is not a source,
+        # but its existence is the signal that a run lost searches.
+        failed = result.status == "error" or '"error":' in text
         path = sources_path(
-            args.get("research_folder"), request.tool_call.get("id"), args.get("query")
+            args.get("research_folder"),
+            request.tool_call.get("id"),
+            args.get("query"),
+            directory=FAILURES_DIR if failed else SOURCES_DIR,
         )
-        body = archive_entry(args.get("query", ""), _message_text(result))
+        body = archive_entry(args.get("query", ""), text)
         return Command(
             update={
                 "files": {path: create_file_data(body)},

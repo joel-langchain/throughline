@@ -55,6 +55,7 @@ from throughline.config import (
 )
 from throughline.delivery import deliver_report
 from throughline.models import model, strong_model
+from throughline.monitoring import record as record_run_signals
 from throughline.quarantine import QuarantineSourcesMiddleware
 from throughline.schemas import FinalPassResult, ResearchResult, VerificationResult
 from throughline.tools import internet_search, scan_ai_week
@@ -614,19 +615,25 @@ def renumber_report_in_files(files: dict | None) -> dict | None:
 
 @after_agent
 def renumber_citations_middleware(state, runtime) -> dict | None:
-    """After the editor finishes: renumber the report in-graph, then deliver it.
+    """After the editor finishes: renumber the report, deliver it, then score the run.
 
     Renumbering (deterministic host-style work, run INSIDE the graph) makes a
     headless / scheduled run's report final on its own. Delivery then pushes that
     finished report to Slack when Slack is configured — a no-op otherwise — so a
-    scheduled run lands somewhere readable without a laptop. Delivery is
-    best-effort and never breaks the run or drops the report from state.
+    scheduled run lands somewhere readable without a laptop.
+
+    Scoring runs last, on the final numbered report and the finished state, and
+    writes its signals to the run's own trace. Nobody watches the weekly run, so
+    it has to report how it went rather than merely that it finished.
+
+    Delivery and scoring are both best-effort: neither breaks the run or drops
+    the report from state.
     """
     files = state.get("files")
     update = renumber_report_in_files(files)
     final_body = update["files"][REPORT_PATH]["content"] if update else _report_body(files)
-    if final_body:
-        deliver_report(final_body)
+    delivered = deliver_report(final_body) if final_body else None
+    record_run_signals(state, final_body or "", delivered=delivered)
     return update
 
 
