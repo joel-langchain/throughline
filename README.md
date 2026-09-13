@@ -22,7 +22,7 @@ It's worth designing for all four from the start, even the ones you build later.
 | **1 · Agent loop** | Editor clusters the week into topics; parallel researchers gather sources; synthesise one cited report | ✅ built |
 | **2 · Verification loop** | Verifier checks claims against their sources, re-researches gaps, drops what can't be backed; deterministic citation numbering | ✅ built |
 | **3 · Event loop** | Deployed on LangGraph Platform; a weekly cron runs it unattended and delivers the report to Slack | ✅ live |
-| **4 · Improvement loop** | Golden-set evals + reference-free evaluators + tracing gate changes; online evaluators and reuse via assistants next | 🛠 building |
+| **4 · Improvement loop** | Golden-set evals gate every change in CI; every production run scores itself on quality and health; alerting and reuse via assistants next | 🛠 building |
 
 ---
 
@@ -64,6 +64,7 @@ flowchart TD
     FP -->|approve| RN[Renumber citations in-graph<br/>to a global 1..N sequence]
     FP -->|approve| U[(Update memory<br/>for next week)]
     RN --> D[Deliver: report.md,<br/>dated archive, Slack]
+    D --> SC[Score the run onto its trace<br/>report quality + run health]
     U -.->|next week| MEM
 ```
 
@@ -98,11 +99,18 @@ Once researchers report back, the editor drops the `SKIP`s (the quality gate),
 then each kept topic is checked before it can reach the report:
 
 - **Citation verification** — a verifier subagent checks each kept topic's claims
-  against its quarantined sources — one file per search, captured verbatim in
-  code so a claim is checked against the real source text. On a `FLAG`, it
-  re-dispatches the researcher to
+  against its quarantined sources. On a `FLAG`, it re-dispatches the researcher to
   close the gap and re-verifies (a bounded re-research loop); any claim that still
   can't be backed is dropped.
+- **Evidence captured in code, not by asking** — the archive the verifier reads
+  is written by a middleware, one file per search, exactly as the search tool
+  returned it. Asking the researcher to paste its sources verbatim did not hold:
+  it summarised them in its own words, so the verifier was checking claims
+  against a paraphrase of the evidence and calling that verification.
+- **Typed verdicts** — every subagent reply gates a decision (keep or drop a
+  topic, re-research or not, revise or publish), so each is a validated field
+  rather than a line of prose the editor has to parse. A dropped colon used to be
+  a silently wrong decision; an omitted verdict is now an error.
 - **Final-pass review** — a reviewer reads the assembled report end to end and
   `APPROVE`s or `REVISE`s for whole-report coherence, style, and governance.
 - **Human-in-the-loop (opt-in)** — when the report trips a risk signal (sensitive
@@ -134,7 +142,20 @@ handled in `build_agent` — the prompt and paths stay identical:
   checks and in-graph citation renumbering still run.
 - **Today's date, injected in-graph** — the report title and the week-keyed memory
   need the current date, which a model doesn't know. A middleware supplies it at
-  run time, so a cron created once dates each week correctly.
+  run time, so a cron created once dates each week correctly. Every subagent gets
+  it too: a researcher left to guess the year searched for "… solution 2024" in
+  2026.
+
+**Nothing one failure can kill.** An unattended run has nobody to retry it, and a
+tool call that raises is fatal to the whole graph — the exception climbs out of
+the subagent, through the editor's delegation, and ends the run with no report.
+That is exactly how one dropped connection to the search provider destroyed a
+week. Three layers now stand in the way: the search session retries transient
+transport failures (including `POST`, which the default policy skips), a failed
+search returns an error result the model can act on instead of raising, and a
+crashed subagent is retried once and then reported to the editor as a topic to
+drop. Dependencies are pinned to the minor the tests ran against, because the
+platform builds from `pyproject.toml` rather than the lockfile.
 
 **Delivery.** Each finished run posts the report to Slack when Slack is configured
 — so a scheduled run lands somewhere readable without a laptop. With a bot token
@@ -164,11 +185,21 @@ Using what happens in real runs to make the system better over time.
   changes land by PR with **auto-merge on green**, so the gate — not a human —
   decides what reaches the deployment.
 - **Tracing** — every run is traced end to end in LangSmith.
+- **Self-scoring runs** — a run that finishes is not a run that worked. Nobody
+  watches the weekly run, and by the time anyone looks the report has already
+  gone out, so each run scores itself and writes the scores to its own trace as
+  feedback. Two families: the five report-quality scorers above, and **run
+  health** — whether a report was produced at all, whether sources were actually
+  archived, how many searches or delegations failed, what the verifier flagged,
+  and whether delivery landed. Because report quality reuses the same scorers as
+  the golden set, a production regression and a CI regression are directly
+  comparable. Scoring is best-effort: it never breaks a run.
 
-**Next in this loop:** online evaluators scoring production runs as usage grows;
-reuse via **assistants** (so others can spin up their own Throughline — their
-topics, sources, models, cadence — against the same deployment without forking);
-and a forecasting / self-evaluating prediction loop. See the [Roadmap](#roadmap).
+**Next in this loop:** alerting on the health signals (they are recorded and
+chartable today, but nothing pushes them to you); reuse via **assistants** (so
+others can spin up their own Throughline — their topics, sources, models,
+cadence — against the same deployment without forking); and a forecasting /
+self-evaluating prediction loop. See the [Roadmap](#roadmap).
 
 ---
 
@@ -209,6 +240,24 @@ evaluator — no LangSmith, no API keys. The same suite runs in CI
 (`.github/workflows/ci.yml`). The richer LangSmith-tracked experiment
 (`uv run python -m evals.run_evals`) still exists for history and the LLM voice
 judge.
+
+The rest of the suite covers the parts that only fail in production: search
+resilience, the verbatim source archive, the typed subagent contracts, Slack
+delivery, and the run-health signals. Everything runs offline in under a second.
+
+### Where things live
+
+| Path | What |
+| --- | --- |
+| `agent.py` | the editor, its three subagents, and the graph |
+| `tools.py` | Tavily search, with transport retries and non-raising failures |
+| `quarantine.py` | archives each search result verbatim, in code |
+| `schemas.py` | the typed contracts subagents reply with |
+| `scoring.py` | reference-free report scorers (shared by CI and production) |
+| `monitoring.py` | scores each finished run onto its trace |
+| `citations.py` | deterministic global citation numbering |
+| `delivery.py` | Slack summary + threaded report |
+| `evals/` | the golden set and its LangSmith harness (dev only, not installed) |
 
 ## Deploy your own
 
@@ -365,6 +414,8 @@ _Done:_
 - [x] Resilience — search transport retries (incl. 429/5xx), searches that fail
   return an error instead of raising, and a failed subagent is retried once then
   dropped rather than killing the run
+- [x] Reproducible deploys — dependencies pinned to the minor CI tests, since the
+  platform builds from `pyproject.toml` and not the lockfile
 
 _Next:_
 
@@ -380,10 +431,12 @@ _Done:_
 - [x] Golden-set evals + reference-free evaluators
 - [x] Automated tests + CI gate (blocks regressions; auto-merge on green)
 - [x] End-to-end tracing
+- [x] Online evaluators — every production run scores itself onto its trace,
+  report quality plus run health
 
 _Next:_
 
-- [ ] Online evaluators scoring production runs as usage grows
+- [ ] Alerting on the health signals (recorded and chartable today, but passive)
 - [ ] Reuse via assistants — others configure their own Throughline (topics,
   sources, models, cadence) against the same deployment
 - [ ] Forecasting — record predictions each week and score them against what happens
@@ -396,6 +449,12 @@ _Next:_
   real filesystem. The runner copies files out of agent state with a
   path-traversal guard.
 - Web-search text is untrusted; keep that in mind before rendering it anywhere.
+  The quarantined archive is raw search output, so treat it as untrusted too, and
+  Slack delivery disables link unfurling for the same reason.
+- A research folder name coming from the model is normalised to a single path
+  segment before it is used, so it cannot escape `/research/`.
+- Secrets stay in environment variables. Delivery and run scoring log outcomes
+  only — never a token, a webhook URL, or an API key.
 
 ## License
 
