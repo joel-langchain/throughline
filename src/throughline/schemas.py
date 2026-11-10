@@ -14,13 +14,17 @@ its allowed values.
 
 The prose fields are still prose — a summary is a summary. What is pinned here is
 the structure the editor branches on.
+
+The verifier goes one step further: the model grades each claim, and code derives
+the verdict from those grades. A model that marks a claim single-source and then
+answers PASS gets FLAG anyway.
 """
 
 from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Source(BaseModel):
@@ -57,15 +61,44 @@ class ResearchResult(BaseModel):
     )
 
 
-class UnsupportedClaim(BaseModel):
-    """One claim the citation-verifier could not find support for."""
+# How well one claim is backed, using only the archived search results. The first
+# two are enough to publish; the last two send the topic back for more research.
+Support = Literal["PRIMARY", "CORROBORATED", "SINGLE_SOURCE", "UNSUPPORTED"]
+PUBLISHABLE: frozenset[str] = frozenset({"PRIMARY", "CORROBORATED"})
+
+
+class ClaimCheck(BaseModel):
+    """The citation-verifier's finding for one cited claim."""
 
     claim: str = Field(description="The claim's exact text, quoted from the summary.")
     citation: int | None = Field(
         default=None, description="The [n] marker on that claim, if it carried one."
     )
-    what_the_source_says: str = Field(
-        description="One line: what the cited source actually says instead."
+    support: Support = Field(
+        description=(
+            "PRIMARY: the archive holds the claim's original source (the paper, "
+            "the filing, the official results page, or the organisation's own "
+            "announcement of what it itself did, attributed to it in the claim). "
+            "CORROBORATED: two or more independent archived sources state it. "
+            "SINGLE_SOURCE: only one secondary source states it. UNSUPPORTED: no "
+            "archived source states it, the [n] points to the wrong source, or "
+            "the claim overstates what the sources say."
+        )
+    )
+    sources: list[Source] = Field(
+        default_factory=list,
+        description=(
+            "The archived sources that back the claim: the primary source, or "
+            "every independent source that states it, cited or not. Empty when "
+            "UNSUPPORTED."
+        ),
+    )
+    note: str = Field(
+        description=(
+            "One line. UNSUPPORTED: what the cited source actually says instead. "
+            "SINGLE_SOURCE: which source, and why nothing else in the archive "
+            "counts. Otherwise: what backs it."
+        )
     )
 
 
@@ -74,12 +107,30 @@ class VerificationResult(BaseModel):
 
     topic: str = Field(description="The topic you checked.")
     verdict: Literal["PASS", "FLAG"] = Field(
-        description="FLAG if ANY cited claim is unsupported, otherwise PASS."
+        description=(
+            "FLAG if ANY claim is SINGLE_SOURCE or UNSUPPORTED, otherwise PASS. "
+            "Corrected from the claims if it disagrees with them."
+        )
     )
-    unsupported: list[UnsupportedClaim] = Field(
+    claims: list[ClaimCheck] = Field(
         default_factory=list,
-        description="The unsupported claims. Empty when the verdict is PASS.",
+        description="One entry per cited claim in the summary, in order.",
     )
+
+    @model_validator(mode="after")
+    def _verdict_follows_the_claims(self) -> VerificationResult:
+        # The decision rule lives here, not in the model's judgement. With no
+        # claims there is nothing to derive from (an empty archive, say), so the
+        # model's own verdict stands.
+        if self.claims:
+            ok = all(c.support in PUBLISHABLE for c in self.claims)
+            self.verdict = "PASS" if ok else "FLAG"
+        return self
+
+    @property
+    def needs_work(self) -> list[ClaimCheck]:
+        """The claims that send this topic back for more research."""
+        return [c for c in self.claims if c.support not in PUBLISHABLE]
 
 
 class FinalPassResult(BaseModel):

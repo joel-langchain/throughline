@@ -102,6 +102,14 @@ then each kept topic is checked before it can reach the report:
   against its quarantined sources. On a `FLAG`, it re-dispatches the researcher to
   close the gap and re-verifies (a bounded re-research loop); any claim that still
   can't be backed is dropped.
+- **Corroboration per claim** — being in a source is not enough. The verifier
+  grades every cited claim `PRIMARY` (the paper, the filing, the organisation's
+  own announcement of what it did), `CORROBORATED` (two independent sources; a
+  republished story counts once), `SINGLE_SOURCE`, or `UNSUPPORTED`, using any
+  archived result, cited or not. Code derives the verdict from those grades, so a
+  single-source claim always goes back for a second source and is dropped if none
+  turns up. Reliability is judged per claim rather than by a list of trusted
+  sites, and each run records the share of claims that held up.
 - **Evidence captured in code, not by asking** — the archive the verifier reads
   is written by a middleware, one file per search, exactly as the search tool
   returned it. Asking the researcher to paste its sources verbatim did not hold:
@@ -401,11 +409,16 @@ _Done:_
   search tool's own output, not the researcher's paraphrase of it
 - [x] Structured, typed subagent outputs — researcher, verifier, and reviewer
   return validated JSON, so a verdict cannot be a mis-parsed line of prose
+- [x] Corroboration per claim — every claim needs a primary source or two
+  independent ones; the verdict is derived from the claim grades in code
 
 _Next:_
 
 - [ ] Source-level dedup (not just topic-level)
-- [ ] Stronger source-tier enforcement (prefer primary / top-tier outlets)
+- [ ] Learned site ratings — rate each new site once (primary, original
+  reporting, analysis, aggregator, content farm) and keep the rating across
+  weeks, so two weak sites cannot corroborate each other; `sources.toml` becomes
+  the override list
 
 ### Loop 3 · Event
 
