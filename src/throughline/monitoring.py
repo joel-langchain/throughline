@@ -25,7 +25,9 @@ Reading the scores: in LangSmith, the tracing project's runs carry these as
 feedback keys, chartable over time. The ones worth acting on are
 `report_produced`, `search_available`, `source_archive_ok`, `citation_integrity`,
 and `delivery_ok`; the counts (`search_failures`, `subagent_failures`,
-`verification_flags`) are worth watching for anything above zero.
+`verification_flags`) are worth watching for anything above zero, and
+`claims_corroborated` is the share of checked claims with a primary source or two
+independent ones.
 
 Scores on a trace are passive: three runs recorded `report_produced = 0` and
 nobody looked. So `alert_text` turns a failing signal into a short Slack message
@@ -40,6 +42,7 @@ import re
 from datetime import date
 
 from throughline.quarantine import FAILURES_DIR, RESEARCH_ROOT, SOURCES_DIR
+from throughline.schemas import PUBLISHABLE
 from throughline.scoring import (
     score_citation_integrity,
     score_dedup,
@@ -128,7 +131,47 @@ def _task_results(messages: list | None) -> tuple[list[dict], int]:
     return parsed, failures
 
 
+def _last_checks(results: list[dict]) -> dict[str, list[dict]]:
+    """The verifier's claim grades from its LAST check of each topic.
+
+    A flagged topic is re-researched and checked again, so only the final check
+    describes what the editor had to work with. Verifier replies are the ones
+    carrying `claims`; later replies replace earlier ones for the same topic.
+    """
+    last: dict[str, list[dict]] = {}
+    for result in results:
+        claims = result.get("claims")
+        if isinstance(claims, list):
+            last[str(result.get("topic", ""))] = [c for c in claims if isinstance(c, dict)]
+    return last
+
+
 # --- the signals ------------------------------------------------------------
+
+
+def _corroboration_signal(results: list[dict]) -> Signal | None:
+    """Share of checked claims backed by a primary source or two independent ones.
+
+    Measured per claim, not per site, so it cannot be raised by trusting more
+    websites. It is the state at each topic's last check, before the editor drops
+    what still failed, so it describes how well the research held up. None when
+    no claims were checked, rather than a misleading score.
+    """
+    claims = [c for checks in _last_checks(results).values() for c in checks]
+    if not claims:
+        return None
+    levels = [str(c.get("support", "")).upper() for c in claims]
+    backed = sum(level in PUBLISHABLE for level in levels)
+    single = levels.count("SINGLE_SOURCE")
+    unsupported = levels.count("UNSUPPORTED")
+    return Signal(
+        "claims_corroborated",
+        round(backed / len(claims), 3),
+        f"{backed} of {len(claims)} checked claim(s) backed by a primary source or "
+        f"two independent sources; {single} single-source, {unsupported} unsupported "
+        "at the last check",
+    )
+
 
 
 def report_signals(report: str, coverage: str) -> list[Signal]:
@@ -231,7 +274,7 @@ def health_signals(
         Signal(
             "verification_flags",
             flags,
-            f"{flags} topic(s) flagged for unsupported citations"
+            f"{flags} topic(s) flagged for unsupported claims"
             if flags
             else "no citation flags",
         ),
@@ -243,6 +286,9 @@ def health_signals(
             else "final pass approved without revision",
         ),
     ]
+    corroboration = _corroboration_signal(results)
+    if corroboration is not None:
+        signals.append(corroboration)
     if delivered is not None:
         signals.append(
             Signal(

@@ -132,7 +132,10 @@ How to work:
    copy search output into a file yourself, and do NOT use write_file for
    sources — it is already done, and a hand-written copy would only compete with
    the real archive.
-3. Write your summary from what you found.
+3. Write your summary from what you found. Each claim must later be backed by a
+   primary source (the paper, the filing, the organisation's own announcement
+   of what it did) or by two independent sources, or it is left out. So where
+   several of your results state the same claim, cite them all.
 
 FOLLOW-UP REQUESTS (a gap-closing re-dispatch):
 - If your task says specific claims were UNSUPPORTED in a previous pass, this is a
@@ -194,8 +197,8 @@ topic_researcher = {
 
 VERIFIER_PROMPT = """You are a citation checker for a weekly AI-news report. You
 are given ONE topic, its research folder, and the researcher's summary with
-inline [n] citation markers. Your job is to decide whether each cited claim is
-actually supported by the quarantined source material — nothing else.
+inline [n] citation markers. Your job is to decide, for each cited claim, whether
+the quarantined source material supports it and how well — nothing else.
 
 How to work:
 1. List /research/<topic>/sources/ and read EVERY file in it. Together they are
@@ -205,11 +208,25 @@ How to work:
    web and do NOT rely on outside knowledge. If the folder is empty or missing,
    say so: return FLAG with "no source archive to check against".
 2. Go through the summary claim by claim. For each sentence carrying a [n] marker,
-   check whether source [n] in the archive actually substantiates it.
-3. Judge each cited claim:
-   - SUPPORTED — the cited source states or clearly implies the claim.
-   - UNSUPPORTED — the source does not back it, the [n] points to the wrong
-     source, or the claim overstates what the source actually says.
+   check whether source [n] in the archive actually substantiates it, then look
+   through the WHOLE archive (cited or not) for other results that state it.
+3. Grade each cited claim with exactly one support level:
+   - PRIMARY — the archive holds the claim's original source: the paper, the
+     filing, the official results or benchmark page, or the organisation's own
+     announcement of something it itself did. An organisation's announcement is
+     primary only for what it did or said, and only when the claim attributes it
+     to them ("X says", "X reports"); it is not primary for claims about others
+     or about what the news means.
+   - CORROBORATED — two or more INDEPENDENT archived sources state it.
+     Independent means different publishers, neither copying the other: a page
+     republishing another outlet's story (a portal carrying a wire report, say)
+     counts once, and so does an article whose only basis is another article.
+   - SINGLE_SOURCE — exactly one secondary source states it, and nothing else in
+     the archive does.
+   - UNSUPPORTED — no archived source states it, the [n] points to the wrong
+     source, or the claim overstates what the sources actually say.
+   List the archived sources behind each PRIMARY or CORROBORATED claim, including
+   any the researcher did not cite, so the editor can cite them too.
 4. Two extra faithfulness checks, using ONLY the archive:
    - PROPER-NOUN / NUMBER FIDELITY: every model name, product name, organisation,
      person, and quantity in the summary must appear in the source material. Flag
@@ -224,11 +241,10 @@ How to work:
 
 YOUR REPLY:
 Return the structured result you have been given a schema for: the topic, a
-PASS/FLAG verdict, and the unsupported claims. FLAG if ANY cited claim is
-unsupported. Quote each unsupported claim exactly, give the [n] it carried, and
-say in one line what that source actually says instead. Leave the list empty when
-the verdict is PASS. Do NOT rewrite the summary — only report what is not
-supported."""
+PASS/FLAG verdict, and one entry for EVERY cited claim, quoted exactly, with the
+[n] it carried, its support level, the sources behind it, and a one-line note.
+FLAG if ANY claim is UNSUPPORTED. Do NOT rewrite the summary — only report what
+backs each claim and what does not."""
 
 verifier_permissions = [
     # Read-only: the verifier checks claims against the quarantined sources and
@@ -240,8 +256,8 @@ verifier_permissions = [
 citation_verifier = {
     "name": "citation-verifier",
     "description": (
-        "Check one topic's cited claims against its quarantined sources and return "
-        "PASS or FLAG with the unsupported claims. Delegate one topic per call."
+        "Check one topic's cited claims against its quarantined sources, grade how "
+        "well each is backed, and return PASS or FLAG. Delegate one topic per call."
     ),
     "system_prompt": VERIFIER_PROMPT,
     "tools": [],
@@ -370,13 +386,16 @@ Work in this order:
       topic, its research folder (/research/<topic>/), and the researcher's
       summary WITH its numbered sources, so it knows what each [n] refers to. It
       reads ONLY the quarantined sources and replies with a JSON object:
-      {"topic", "verdict", "unsupported": [{"claim", "citation",
-      "what_the_source_says"}, ...]}.
+      {"topic", "verdict", "claims": [{"claim", "citation", "support",
+      "sources": [{"title", "url"}, ...], "note"}, ...]}. `support` is PRIMARY
+      or CORROBORATED (publishable), SINGLE_SOURCE (leave out), or UNSUPPORTED
+      (re-research).
    b) If the verdict is PASS, keep the topic as researched.
    c) If it is FLAG, GO AGAIN: re-dispatch the SAME topic to the topic-researcher
-      via the task tool, quoting the `claim` of each unsupported entry and asking
+      via the task tool, quoting the `claim` of each UNSUPPORTED entry and asking
       for independent support (or a correction/removal). Then re-verify the
-      updated summary by repeating step (a).
+      updated summary by repeating step (a). Do NOT re-research SINGLE_SOURCE
+      claims: they are simply left out (step 7).
    d) STOP CONDITION: run this re-research + re-verify loop AT MOST
       <<MAX_VERIFY_RETRIES>> time(s) per topic. This cap is a HARD limit, not the
       verifier's or your own judgement — do not exceed it however tempting. If a
@@ -419,6 +438,12 @@ Work in this order:
    - Cite PRIMARY sources where a story rests on one (e.g. a Science/Nature/arXiv
      paper): put the paper's own URL on the claim and in Sources, not only the
      secondary coverage.
+   - Use ONLY claims the verifier's last check graded PRIMARY or CORROBORATED.
+     Leave every SINGLE_SOURCE claim out of the report; if a topic's substance
+     rests on single-source claims, drop the topic.
+   - Cite EVERY source the verifier listed for a claim, stacked, so a reader can
+     see a corroborated claim is corroborated. Those lists can include archived
+     sources the researcher did not cite; they belong in Sources too.
    - Precision in the prose: give counts as a single number (if two sources
      disagree, say so and pick one — do not print a range for a single quantity);
      and when you state a comparative (e.g. "100x cheaper"), name the unit it is

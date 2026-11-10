@@ -265,3 +265,43 @@ def test_recording_survives_junk_state() -> None:
 def test_recording_returns_the_signals_it_computed() -> None:
     state = {"files": _files(), "messages": []}
     assert {s["key"] for s in record(state, REPORT, delivered=True)} >= {"report_produced"}
+
+
+# --- corroboration, per claim -------------------------------------------------
+
+
+def _verified(topic: str, *levels: str):
+    claims = ", ".join(
+        f'{{"claim": "c{i}", "support": "{level}", "sources": [], "note": "n"}}'
+        for i, level in enumerate(levels)
+    )
+    return _task(f'{{"topic": "{topic}", "verdict": "PASS", "claims": [{claims}]}}')
+
+
+def test_corroboration_is_measured_per_claim() -> None:
+    messages = [
+        _task('{"topic": "a", "verdict": "KEEP"}'),
+        _verified("a", "PRIMARY", "CORROBORATED", "SINGLE_SOURCE", "UNSUPPORTED"),
+    ]
+    signal = _by_key(health_signals(_files(), messages, None))["claims_corroborated"]
+    assert signal["score"] == 0.5
+    assert "2 of 4" in signal["comment"]
+    assert "1 single-source, 1 unsupported" in signal["comment"]
+
+
+def test_only_the_last_check_of_a_topic_counts() -> None:
+    # A flagged topic is re-researched and checked again; the first check's
+    # failures are what the second pass fixed, so they must not drag the score.
+    messages = [
+        _verified("a", "SINGLE_SOURCE", "SINGLE_SOURCE"),
+        _verified("b", "PRIMARY"),
+        _verified("a", "CORROBORATED", "CORROBORATED"),
+    ]
+    signal = _by_key(health_signals(_files(), messages, None))["claims_corroborated"]
+    assert signal["score"] == 1.0
+    assert "3 of 3" in signal["comment"]
+
+
+def test_no_corroboration_score_when_nothing_was_checked() -> None:
+    messages = [_task('{"topic": "a", "verdict": "KEEP"}')]
+    assert "claims_corroborated" not in _by_key(health_signals(_files(), messages, None))
