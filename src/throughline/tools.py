@@ -10,15 +10,24 @@ must cost a researcher one search result, not the week's report. So the Tavily
 session retries transient transport failures itself, and neither tool lets an
 exception escape into the graph — a failed search comes back as an empty result
 with an `error` the model can read and act on.
+
+Some failures are not transient, though. When Tavily refuses the plan (usage
+limit reached) or the key, every later search in the run fails the same way.
+Three scheduled runs ended like that with no report: the researchers did as told
+and retried, dozens of times, and each run still finished "successfully". So the
+first such refusal stops search for the rest of the run, in code, and the tools
+say so in words the model is told to act on.
 """
 
 import os
+import re
 from urllib.parse import urlparse
 
 from langchain_core.tools import tool
 from requests import Session
 from requests.adapters import HTTPAdapter, Retry
 from tavily import TavilyClient
+from tavily.errors import ForbiddenError, InvalidAPIKeyError, MissingAPIKeyError
 
 from throughline.config import (
     PRESS_RELEASE_DOMAINS as _PRESS_RELEASE_DOMAINS,
@@ -79,9 +88,59 @@ def _client() -> TavilyClient:
     return _tavily
 
 
+# Refusals no retry can fix within a run. Tavily maps 403 and its plan-limit
+# codes (432, 433) to ForbiddenError and 401 to InvalidAPIKeyError. A 429 is a
+# rate limit, which the transport already retries, so it is not on this list.
+_FATAL_SEARCH_ERRORS = (ForbiddenError, InvalidAPIKeyError, MissingAPIKeyError)
+
+# Why search stopped in this run, or None while it works. Process state on
+# purpose: a usage limit or a bad key belongs to the API key, not to one
+# researcher, so the first refusal holds for every search after it. The editor
+# clears it at the start of each run, so a plan or key fixed between runs is
+# tried again.
+_outage: str | None = None
+
+_KEY_LIKE = re.compile(r"tvly-[A-Za-z0-9_-]+")
+
+
+class SearchUnavailable(RuntimeError):
+    """Search was refused for the rest of this run; retrying cannot help."""
+
+
+def search_outage() -> str | None:
+    """Why search stopped in this run, or None if it has not."""
+    return _outage
+
+
+def reset_search_outage() -> None:
+    """Forget a previous run's outage, so this run tries search again."""
+    global _outage
+    _outage = None
+
+
+def _describe(exc: Exception) -> str:
+    """A short, key-free description of a provider refusal, safe to post to Slack."""
+    return _KEY_LIKE.sub("tvly-…", f"{type(exc).__name__}: {exc}")[:200]
+
+
 def _search(query: str, max_results: int) -> dict:
     """One recent-news search; the single place both tools call Tavily from."""
-    return _client().search(query, max_results=max_results, topic="news", days=7)
+    global _outage
+    if _outage is not None:
+        raise SearchUnavailable(_outage)
+    try:
+        return _client().search(query, max_results=max_results, topic="news", days=7)
+    except _FATAL_SEARCH_ERRORS as exc:
+        _outage = _describe(exc)
+        raise SearchUnavailable(_outage) from exc
+
+
+def _unavailable(exc: SearchUnavailable) -> str:
+    """The model-facing text for a search that will not work again this run."""
+    return (
+        f"search is unavailable for the rest of this run ({exc}). "
+        "Do not retry: every search will fail the same way."
+    )
 
 
 # Legitimacy is enforced deterministically, not left to the model's judgement.
@@ -125,6 +184,14 @@ def scan_ai_week(extra_query: str = "") -> str:
     for seed in seeds:
         try:
             res = _search(seed, max_results=6)
+        except SearchUnavailable as exc:
+            # The researchers cannot search either, so a partial scan would only
+            # send them off to fail. Stop the week here; the run reports it.
+            return (
+                f"STOP: {_unavailable(exc)} The researchers cannot search either, so "
+                "do not delegate research and do not write a report. The run reports "
+                "the outage itself."
+            )
         except Exception as exc:  # keep scanning even if one seed fails
             lines.append(f"[search failed for '{seed}': {exc}]")
             continue
@@ -162,10 +229,14 @@ def internet_search(query: str, research_folder: str = "", max_results: int = 8)
     If the search itself fails (network or provider error), the result has an
     empty `results` list and an `error` field describing what went wrong. That
     is not a signal that nothing was published — run the search again, or try a
-    rephrased query, before concluding a topic has no coverage.
+    rephrased query, before concluding a topic has no coverage. The exception is
+    an error saying search is unavailable for the rest of this run: then stop
+    searching, because every further search will fail the same way.
     """
     try:
         res = _search(query, max_results=max_results)
+    except SearchUnavailable as exc:
+        return {"query": query, "results": [], "error": _unavailable(exc)}
     except Exception as exc:  # a failed search is a result, never a crash
         return {
             "query": query,

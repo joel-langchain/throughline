@@ -15,6 +15,10 @@ Two transports, chosen by what is configured:
 Neither set → no-op. Uses only the standard library, and never raises: a delivery
 failure must not fail the run or lose the report from state.
 
+A run that needs a person (no report, search refused, a broken archive or
+citations, a failed delivery) also posts a short alert through the same
+transport, so a lost week is noticed on the Monday rather than weeks later.
+
 Delivery logs a one-line, secret-free outcome (``[delivery] ...``) so a run's
 logs/trace show WHY a post did or didn't happen. The token and the webhook URL
 are never logged.
@@ -243,6 +247,20 @@ def _deliver_via_webhook(url: str, report_body: str) -> bool:
         return False
 
 
+def _alert_via_bot(token: str, channel: str, text: str) -> bool:
+    """Post a run alert as one channel message. It is short, so it needs no thread."""
+    try:
+        reply = _post_message(token, _message(channel, text))
+    except Exception as exc:
+        _log(f"alert failed: {type(exc).__name__} posting the alert")
+        return False
+    if not reply.get("ok"):
+        _log(f"alert failed: Slack refused the alert ({reply.get('error', 'unknown')})")
+        return False
+    _log("alert posted to Slack")
+    return True
+
+
 def deliver_report(report_body: str) -> bool:
     """Post the report to Slack if configured. Returns True if a post was sent.
 
@@ -255,7 +273,21 @@ def deliver_report(report_body: str) -> bool:
     if not report_body:
         _log("skipped: no report body to send")
         return False
+    return _send(report_body, _deliver_via_bot)
 
+
+def deliver_alert(text: str) -> bool:
+    """Post a run alert to the same Slack destination as the report.
+
+    Same transports, same configuration, and the same promise: never raises.
+    """
+    if not text:
+        return False
+    return _send(text, _alert_via_bot)
+
+
+def _send(text: str, via_bot) -> bool:
+    """Route `text` to whichever Slack transport is configured."""
     token = os.environ.get("SLACK_BOT_TOKEN", "").strip()
     channel = os.environ.get("SLACK_CHANNEL_ID", "").strip()
     webhook = os.environ.get("SLACK_WEBHOOK_URL", "").strip()
@@ -267,14 +299,14 @@ def deliver_report(report_body: str) -> bool:
                 "(expected it to start with xoxb- or xoxp-)"
             )
             return False
-        return _deliver_via_bot(token, channel, report_body)
+        return via_bot(token, channel, text)
 
     if token and not channel:
         _log("skipped: SLACK_BOT_TOKEN is set but SLACK_CHANNEL_ID is not")
         return False
 
     if webhook:
-        return _deliver_via_webhook(webhook, report_body)
+        return _deliver_via_webhook(webhook, text)
 
     _log(
         "skipped: no Slack delivery configured "
