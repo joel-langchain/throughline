@@ -22,10 +22,14 @@ call beyond the optional voice judge. Scoring is best-effort and never raises:
 a monitoring failure must not cost the report.
 
 Reading the scores: in LangSmith, the tracing project's runs carry these as
-feedback keys, chartable over time and alertable with a threshold. The ones worth
-alerting on are `report_produced`, `source_archive_ok`, `citation_integrity`,
+feedback keys, chartable over time. The ones worth acting on are
+`report_produced`, `search_available`, `source_archive_ok`, `citation_integrity`,
 and `delivery_ok`; the counts (`search_failures`, `subagent_failures`,
 `verification_flags`) are worth watching for anything above zero.
+
+Scores on a trace are passive: three runs recorded `report_produced = 0` and
+nobody looked. So `alert_text` turns a failing signal into a short Slack message
+for the run to post itself.
 """
 
 from __future__ import annotations
@@ -33,6 +37,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import date
 
 from throughline.quarantine import FAILURES_DIR, RESEARCH_ROOT, SOURCES_DIR
 from throughline.scoring import (
@@ -140,7 +145,13 @@ def report_signals(report: str, coverage: str) -> list[Signal]:
     return [Signal(key, score, comment) for key, (score, comment) in checks]
 
 
-def health_signals(files: dict | None, messages: list | None, delivered: bool | None) -> list[Signal]:
+def health_signals(
+    files: dict | None,
+    messages: list | None,
+    delivered: bool | None,
+    *,
+    search_outage: str | None = None,
+) -> list[Signal]:
     """What the report cannot tell you: did the machinery actually work?"""
     report = _file_text(files, "/output/report.md")
     archived = _count_archive(files, SOURCES_DIR)
@@ -171,18 +182,29 @@ def health_signals(files: dict | None, messages: list | None, delivered: bool | 
         ),
         Signal("topic_count", topics, f"{topics} topic section(s) in the report"),
         Signal("source_count", sources, f"{sources} distinct source(s) cited"),
+        Signal(
+            "search_available",
+            0.0 if search_outage else 1.0,
+            f"search refused for the rest of the run ({search_outage})"
+            if search_outage
+            else "search available for the whole run",
+        ),
         # Zero archived sources WHILE research happened means the quarantine
         # stopped working and the verifier has been checking nothing. Zero with no
-        # research at all is just a run that did none, so the comment has to
-        # distinguish them: an alarming line on a healthy run sends someone
-        # chasing a problem that isn't there.
+        # research at all is just a run that did none, and zero because every
+        # search failed is a search problem (the quarantine archived the
+        # failures, so it was working). The comment has to tell these apart: an
+        # alarming line on a healthy archive sends someone chasing a problem
+        # that isn't there.
         Signal(
             "source_archive_ok",
-            0.0 if (results and archived == 0) else 1.0,
+            0.0 if (results and archived == 0 and failed_searches == 0) else 1.0,
             f"{archived} search result(s) archived"
             if archived
             else (
-                "NO sources archived — the verifier had no evidence to check"
+                "nothing archived because every search failed"
+                if failed_searches
+                else "NO sources archived — the verifier had no evidence to check"
                 if results
                 else "no research in this run, so nothing to archive"
             ),
@@ -233,16 +255,60 @@ def health_signals(files: dict | None, messages: list | None, delivered: bool | 
 
 
 def run_signals(
-    state: dict | None, report: str, *, delivered: bool | None = None
+    state: dict | None,
+    report: str,
+    *,
+    delivered: bool | None = None,
+    search_outage: str | None = None,
 ) -> list[Signal]:
     """Every signal for one finished run."""
     state = state or {}
     files = state.get("files")
     coverage = _file_text(files, COVERAGE_PATH)
     return [
-        *health_signals(files, state.get("messages"), delivered),
+        *health_signals(files, state.get("messages"), delivered, search_outage=search_outage),
         *report_signals(report, coverage),
     ]
+
+
+# --- telling someone --------------------------------------------------------
+
+# The signals that mean the week did not land, or landed broken. The rest are
+# counts worth charting, not reasons to interrupt anyone.
+ALERT_KEYS = (
+    "report_produced",
+    "search_available",
+    "source_archive_ok",
+    "citation_integrity",
+    "delivery_ok",
+)
+# Counts that help explain an alert when they are above zero.
+_CONTEXT_KEYS = ("search_failures", "subagent_failures")
+
+
+def alert_text(signals: list[Signal], today: date | None = None) -> str | None:
+    """A short Slack message when the run needs a person to look, else None.
+
+    Pure, so it is testable without Slack. Built from the signals' own comments,
+    so the alert and the trace cannot disagree about what happened.
+    """
+    by_key = {s["key"]: s for s in signals}
+    failing = [by_key[k] for k in ALERT_KEYS if k in by_key and by_key[k]["score"] < 1.0]
+    if not failing:
+        return None
+    produced = "report_produced" in by_key and by_key["report_produced"]["score"] >= 1.0
+    lines = [
+        f"*Throughline run alert · {(today or date.today()).isoformat()}*",
+        "This week's run needs a look." if produced else "No report this week.",
+        *(f"• {s['comment']}" for s in failing),
+        *(
+            f"• {by_key[k]['comment']}"
+            for k in _CONTEXT_KEYS
+            if k in by_key and by_key[k]["score"] > 0
+        ),
+        "The full scores are on this run's trace.",
+    ]
+    return "\n".join(lines)
 
 
 # --- attaching them to the trace -------------------------------------------
@@ -261,7 +327,13 @@ def _current_run_id() -> str | None:
     return str(getattr(tree, "trace_id", None) or getattr(tree, "id", "")) or None
 
 
-def record(state: dict | None, report: str, *, delivered: bool | None = None) -> list[Signal]:
+def record(
+    state: dict | None,
+    report: str,
+    *,
+    delivered: bool | None = None,
+    search_outage: str | None = None,
+) -> list[Signal]:
     """Score the run and attach the scores to its trace. Never raises.
 
     Returns the signals so a caller (or a test) can see them even when there is
@@ -269,7 +341,7 @@ def record(state: dict | None, report: str, *, delivered: bool | None = None) ->
     and a deployed run are both readable from their logs.
     """
     try:
-        signals = run_signals(state, report, delivered=delivered)
+        signals = run_signals(state, report, delivered=delivered, search_outage=search_outage)
     except Exception as exc:  # noqa: BLE001 - monitoring must not cost the report
         logger.warning("scoring failed: %s", exc)
         print(f"[monitoring] scoring failed: {type(exc).__name__}: {exc}", flush=True)

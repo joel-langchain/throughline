@@ -41,6 +41,7 @@ from langchain.agents.middleware import (
     InterruptOnConfig,
     ToolRetryMiddleware,
     after_agent,
+    before_agent,
     dynamic_prompt,
 )
 from langchain.agents.middleware.types import ToolCallRequest
@@ -53,12 +54,18 @@ from throughline.config import (
     SENSITIVE_TERMS,
     UNCERTAINTY_MARKERS,
 )
-from throughline.delivery import deliver_report
+from throughline.delivery import deliver_alert, deliver_report
 from throughline.models import model, strong_model
+from throughline.monitoring import alert_text
 from throughline.monitoring import record as record_run_signals
 from throughline.quarantine import QuarantineSourcesMiddleware
 from throughline.schemas import FinalPassResult, ResearchResult, VerificationResult
-from throughline.tools import internet_search, scan_ai_week
+from throughline.tools import (
+    internet_search,
+    reset_search_outage,
+    scan_ai_week,
+    search_outage,
+)
 
 # --- Today's date, injected at run time ------------------------------------
 
@@ -117,7 +124,9 @@ How to work:
    this week: releases, results, primary papers, credible analysis. ALWAYS pass
    your assigned research folder as `research_folder`. If a search comes back
    with an `error` field and no results, the search itself failed — run it again
-   or rephrase it. Do not read a failed search as "no coverage".
+   or rephrase it. Do not read a failed search as "no coverage". The one
+   exception: if the error says search is unavailable for the rest of this run,
+   stop searching at once and return SKIP with that as the reason.
 2. Your searches are archived for you. Every result is written verbatim to
    /research/<topic>/sources/ automatically, as the tool returned it. Do NOT
    copy search output into a file yourself, and do NOT use write_file for
@@ -329,6 +338,8 @@ Work in this order:
    the first week and everything is NEW.)
 2. Call scan_ai_week ONCE to see what people are writing about this week.
    (Call it a second time with an `extra_query` only if the picture is thin.)
+   If it answers STOP because search is unavailable, end the run there: do not
+   delegate research, write a report, or update memory.
 3. CLUSTER what you see into 4-6 topics that EMERGE from the writing — the
    themes people are actually discussing, not a fixed list you decided in
    advance. Give each a short, specific name. Then, using your memory from step
@@ -613,6 +624,13 @@ def renumber_report_in_files(files: dict | None) -> dict | None:
     return {"files": {REPORT_PATH: {"content": new_body, "encoding": "utf-8"}}}
 
 
+@before_agent
+def reset_search_outage_middleware(state, runtime) -> None:
+    """Start each run with search assumed working, in case the plan or key was fixed."""
+    reset_search_outage()
+    return None
+
+
 @after_agent
 def renumber_citations_middleware(state, runtime) -> dict | None:
     """After the editor finishes: renumber the report, deliver it, then score the run.
@@ -624,16 +642,24 @@ def renumber_citations_middleware(state, runtime) -> dict | None:
 
     Scoring runs last, on the final numbered report and the finished state, and
     writes its signals to the run's own trace. Nobody watches the weekly run, so
-    it has to report how it went rather than merely that it finished.
+    it has to report how it went rather than merely that it finished. The trace
+    alone was not enough: three runs scored themselves "no report" and nobody
+    saw it until the week had gone. So when a signal worth acting on fails, the
+    same Slack channel gets a short alert saying what happened.
 
-    Delivery and scoring are both best-effort: neither breaks the run or drops
-    the report from state.
+    Delivery, scoring, and the alert are all best-effort: none breaks the run or
+    drops the report from state.
     """
     files = state.get("files")
     update = renumber_report_in_files(files)
     final_body = update["files"][REPORT_PATH]["content"] if update else _report_body(files)
     delivered = deliver_report(final_body) if final_body else None
-    record_run_signals(state, final_body or "", delivered=delivered)
+    signals = record_run_signals(
+        state, final_body or "", delivered=delivered, search_outage=search_outage()
+    )
+    alert = alert_text(signals)
+    if alert:
+        deliver_alert(alert)
     return update
 
 
@@ -670,7 +696,12 @@ def build_agent(checkpointer=None, *, persistent_memory=False, review=True):
         subagents=[topic_researcher, citation_verifier, final_pass_reviewer],
         permissions=editor_permissions,
         interrupt_on=report_review if review else None,
-        middleware=[todays_date_middleware, task_failure_guard, renumber_citations_middleware],
+        middleware=[
+            reset_search_outage_middleware,
+            todays_date_middleware,
+            task_failure_guard,
+            renumber_citations_middleware,
+        ],
         backend=backend,
         checkpointer=checkpointer,
     )

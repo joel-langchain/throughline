@@ -22,7 +22,7 @@ It's worth designing for all four from the start, even the ones you build later.
 | **1 · Agent loop** | Editor clusters the week into topics; parallel researchers gather sources; synthesise one cited report | ✅ built |
 | **2 · Verification loop** | Verifier checks claims against their sources, re-researches gaps, drops what can't be backed; deterministic citation numbering | ✅ built |
 | **3 · Event loop** | Deployed on LangGraph Platform; a weekly cron runs it unattended and delivers the report to Slack | ✅ live |
-| **4 · Improvement loop** | Golden-set evals gate every change in CI; every production run scores itself on quality and health; alerting and reuse via assistants next | 🛠 building |
+| **4 · Improvement loop** | Golden-set evals gate every change in CI; every production run scores itself on quality and health, and posts a Slack alert when it needs a person; reuse via assistants next | 🛠 building |
 
 ---
 
@@ -194,9 +194,15 @@ Using what happens in real runs to make the system better over time.
   and whether delivery landed. Because report quality reuses the same scorers as
   the golden set, a production regression and a CI regression are directly
   comparable. Scoring is best-effort: it never breaks a run.
+- **Alerting** — scores on a trace are passive. Three scheduled runs hit the
+  search provider's plan usage limit, kept retrying (72, 63, and 39 failed
+  searches), produced no report, and still finished "successfully". Now the first
+  refusal of the plan or key stops search for the rest of the run, and a run
+  whose key signals fail (no report, search refused, nothing archived, broken
+  citations, delivery failed) posts a short alert to the report's Slack channel
+  saying what happened.
 
-**Next in this loop:** alerting on the health signals (they are recorded and
-chartable today, but nothing pushes them to you); reuse via **assistants** (so
+**Next in this loop:** reuse via **assistants** (so
 others can spin up their own Throughline — their topics, sources, models,
 cadence — against the same deployment without forking); and a forecasting /
 self-evaluating prediction loop. See the [Roadmap](#roadmap).
@@ -433,10 +439,11 @@ _Done:_
 - [x] End-to-end tracing
 - [x] Online evaluators — every production run scores itself onto its trace,
   report quality plus run health
+- [x] Alerting — a run that needs a person posts a Slack alert, and a refused
+  search plan or key stops search for the rest of the run
 
 _Next:_
 
-- [ ] Alerting on the health signals (recorded and chartable today, but passive)
 - [ ] Reuse via assistants — others configure their own Throughline (topics,
   sources, models, cadence) against the same deployment
 - [ ] Forecasting — record predictions each week and score them against what happens
