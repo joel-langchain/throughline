@@ -132,19 +132,17 @@ How to work:
    copy search output into a file yourself, and do NOT use write_file for
    sources — it is already done, and a hand-written copy would only compete with
    the real archive.
-3. Write your summary from what you found. Every claim will be checked for a
+3. Write your summary from what you found. Each claim must later be backed by a
    primary source (the paper, the filing, the organisation's own announcement
-   of what it did) or two independent sources. Where a claim rests on one
-   article, look for the primary source or a second outlet before you rely on it.
+   of what it did) or by two independent sources, or it is left out. So where
+   several of your results state the same claim, cite them all.
 
 FOLLOW-UP REQUESTS (a gap-closing re-dispatch):
-- If your task says specific claims were UNSUPPORTED or SINGLE_SOURCE in a
-  previous pass, this is a second look. FIRST list /research/<topic>/sources/ and
-  read what you already have, THEN run additional searches aimed squarely at
-  those flagged claims: support for an UNSUPPORTED one, and a second independent
-  outlet or the primary source for a SINGLE_SOURCE one. The new results are
-  archived alongside the old ones, so nothing is lost and you need not rewrite
-  anything.
+- If your task says specific claims were UNSUPPORTED in a previous pass, this is a
+  second look. FIRST list /research/<topic>/sources/ and read what you already
+  have, THEN run additional searches aimed squarely at those flagged claims. The
+  new results are archived alongside the old ones, so nothing is lost and you
+  need not rewrite anything.
 - Return an updated summary that keeps ONLY claims your sources actually support;
   correct or drop the ones you could not substantiate. Do not restate a claim you
   still cannot back.
@@ -245,8 +243,8 @@ YOUR REPLY:
 Return the structured result you have been given a schema for: the topic, a
 PASS/FLAG verdict, and one entry for EVERY cited claim, quoted exactly, with the
 [n] it carried, its support level, the sources behind it, and a one-line note.
-FLAG if ANY claim is SINGLE_SOURCE or UNSUPPORTED. Do NOT rewrite the summary —
-only report what backs each claim and what does not."""
+FLAG if ANY claim is UNSUPPORTED. Do NOT rewrite the summary — only report what
+backs each claim and what does not."""
 
 verifier_permissions = [
     # Read-only: the verifier checks claims against the quarantined sources and
@@ -390,21 +388,20 @@ Work in this order:
       reads ONLY the quarantined sources and replies with a JSON object:
       {"topic", "verdict", "claims": [{"claim", "citation", "support",
       "sources": [{"title", "url"}, ...], "note"}, ...]}. `support` is PRIMARY
-      or CORROBORATED (publishable) or SINGLE_SOURCE or UNSUPPORTED (not yet).
+      or CORROBORATED (publishable), SINGLE_SOURCE (leave out), or UNSUPPORTED
+      (re-research).
    b) If the verdict is PASS, keep the topic as researched.
    c) If it is FLAG, GO AGAIN: re-dispatch the SAME topic to the topic-researcher
-      via the task tool, quoting the `claim` of each SINGLE_SOURCE or UNSUPPORTED
-      entry and saying which it is. For SINGLE_SOURCE, ask for a second
-      independent source or the primary source; for UNSUPPORTED, ask for support
-      or a correction/removal. Then re-verify the updated summary by repeating
-      step (a).
+      via the task tool, quoting the `claim` of each UNSUPPORTED entry and asking
+      for independent support (or a correction/removal). Then re-verify the
+      updated summary by repeating step (a). Do NOT re-research SINGLE_SOURCE
+      claims: they are simply left out (step 7).
    d) STOP CONDITION: run this re-research + re-verify loop AT MOST
       <<MAX_VERIFY_RETRIES>> time(s) per topic. This cap is a HARD limit, not the
       verifier's or your own judgement — do not exceed it however tempting. If a
-      topic still FLAGs after the final allowed attempt, drop every claim that is
-      still SINGLE_SOURCE or UNSUPPORTED (or the whole topic if its substance
-      depends on them), keeping ONLY what is PRIMARY or CORROBORATED. Never
-      invent support to save a claim.
+      topic still FLAGs after the final allowed attempt, drop the unsupported
+      claims (or the whole topic if its substance depends on them), keeping ONLY
+      what the sources support. Never invent support to save a claim.
 7. Synthesise the KEPT topics into ONE report and write it with write_file to
    /output/report.md. Structure:
      # Throughline — This Week in AI · <date>
@@ -441,6 +438,9 @@ Work in this order:
    - Cite PRIMARY sources where a story rests on one (e.g. a Science/Nature/arXiv
      paper): put the paper's own URL on the claim and in Sources, not only the
      secondary coverage.
+   - Use ONLY claims the verifier's last check graded PRIMARY or CORROBORATED.
+     Leave every SINGLE_SOURCE claim out of the report; if a topic's substance
+     rests on single-source claims, drop the topic.
    - Cite EVERY source the verifier listed for a claim, stacked, so a reader can
      see a corroborated claim is corroborated. Those lists can include archived
      sources the researcher did not cite; they belong in Sources too.

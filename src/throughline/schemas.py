@@ -16,7 +16,7 @@ The prose fields are still prose — a summary is a summary. What is pinned here
 the structure the editor branches on.
 
 The verifier goes one step further: the model grades each claim, and code derives
-the verdict from those grades. A model that marks a claim single-source and then
+the verdict from those grades. A model that marks a claim unsupported and then
 answers PASS gets FLAG anyway.
 """
 
@@ -62,7 +62,9 @@ class ResearchResult(BaseModel):
 
 
 # How well one claim is backed, using only the archived search results. The first
-# two are enough to publish; the last two send the topic back for more research.
+# two are enough to publish. SINGLE_SOURCE is left out of the report without more
+# research, so grading adds no searches to a run; only UNSUPPORTED sends a topic
+# back, exactly as before grading existed.
 Support = Literal["PRIMARY", "CORROBORATED", "SINGLE_SOURCE", "UNSUPPORTED"]
 PUBLISHABLE: frozenset[str] = frozenset({"PRIMARY", "CORROBORATED"})
 
@@ -108,8 +110,8 @@ class VerificationResult(BaseModel):
     topic: str = Field(description="The topic you checked.")
     verdict: Literal["PASS", "FLAG"] = Field(
         description=(
-            "FLAG if ANY claim is SINGLE_SOURCE or UNSUPPORTED, otherwise PASS. "
-            "Corrected from the claims if it disagrees with them."
+            "FLAG if ANY claim is UNSUPPORTED, otherwise PASS. Corrected from "
+            "the claims if it disagrees with them."
         )
     )
     claims: list[ClaimCheck] = Field(
@@ -123,13 +125,17 @@ class VerificationResult(BaseModel):
         # claims there is nothing to derive from (an empty archive, say), so the
         # model's own verdict stands.
         if self.claims:
-            ok = all(c.support in PUBLISHABLE for c in self.claims)
-            self.verdict = "PASS" if ok else "FLAG"
+            self.verdict = "FLAG" if self.to_research else "PASS"
         return self
 
     @property
-    def needs_work(self) -> list[ClaimCheck]:
+    def to_research(self) -> list[ClaimCheck]:
         """The claims that send this topic back for more research."""
+        return [c for c in self.claims if c.support == "UNSUPPORTED"]
+
+    @property
+    def to_leave_out(self) -> list[ClaimCheck]:
+        """The claims the report must not carry: anything not PRIMARY or CORROBORATED."""
         return [c for c in self.claims if c.support not in PUBLISHABLE]
 
 

@@ -274,7 +274,7 @@ def health_signals(
         Signal(
             "verification_flags",
             flags,
-            f"{flags} topic(s) flagged for unsupported or single-source claims"
+            f"{flags} topic(s) flagged for unsupported claims"
             if flags
             else "no citation flags",
         ),

@@ -106,10 +106,11 @@ then each kept topic is checked before it can reach the report:
   grades every cited claim `PRIMARY` (the paper, the filing, the organisation's
   own announcement of what it did), `CORROBORATED` (two independent sources; a
   republished story counts once), `SINGLE_SOURCE`, or `UNSUPPORTED`, using any
-  archived result, cited or not. Code derives the verdict from those grades, so a
-  single-source claim always goes back for a second source and is dropped if none
-  turns up. Reliability is judged per claim rather than by a list of trusted
-  sites, and each run records the share of claims that held up.
+  archived result, cited or not. A single-source claim is left out of the report
+  rather than re-researched, so grading adds no searches to a run; only an
+  unsupported claim sends a topic back, as before, and code derives that verdict
+  from the grades. Reliability is judged per claim rather than by a list of
+  trusted sites, and each run records the share of claims that held up.
 - **Evidence captured in code, not by asking** — the archive the verifier reads
   is written by a middleware, one file per search, exactly as the search tool
   returned it. Asking the researcher to paste its sources verbatim did not hold:
@@ -409,8 +410,9 @@ _Done:_
   search tool's own output, not the researcher's paraphrase of it
 - [x] Structured, typed subagent outputs — researcher, verifier, and reviewer
   return validated JSON, so a verdict cannot be a mis-parsed line of prose
-- [x] Corroboration per claim — every claim needs a primary source or two
-  independent ones; the verdict is derived from the claim grades in code
+- [x] Corroboration per claim — a claim reaches the report only with a primary
+  source or two independent ones; single-source claims are left out with no
+  extra research
 
 _Next:_
 

@@ -95,7 +95,7 @@ def test_a_flag_carries_the_claim_and_what_the_source_really_says() -> None:
         ],
     )
     # The editor re-dispatches using these fields, so each must survive intact.
-    (claim,) = result.needs_work
+    (claim,) = result.to_research
     assert claim.claim == "The model scored 84.5%."
     assert claim.citation == 2
     assert "no figure" in claim.note
@@ -163,17 +163,32 @@ def _check(support: str, *urls: str) -> ClaimCheck:
     )
 
 
-def test_a_single_source_claim_flags_the_topic_whatever_the_model_said() -> None:
-    # The failure designed out: a model that grades a claim single-source and
+def test_an_unsupported_claim_flags_the_topic_whatever_the_model_said() -> None:
+    # The failure designed out: a model that grades a claim unsupported and
     # still answers PASS. Code derives the verdict, so the topic goes back.
     result = VerificationResult(
         topic="t",
         verdict="PASS",
         claims=[_check("CORROBORATED", "https://a.example/1", "https://b.example/2"),
-                _check("SINGLE_SOURCE", "https://c.example/3")],
+                _check("UNSUPPORTED")],
     )
     assert result.verdict == "FLAG"
-    assert [c.support for c in result.needs_work] == ["SINGLE_SOURCE"]
+    assert [c.support for c in result.to_research] == ["UNSUPPORTED"]
+
+
+def test_a_single_source_claim_is_left_out_without_more_research() -> None:
+    # Re-researching single-source claims would add searches and model calls to
+    # every run. They are dropped from the report instead, so grading costs no
+    # extra research: only UNSUPPORTED sends a topic back, as before.
+    result = VerificationResult(
+        topic="t",
+        verdict="FLAG",
+        claims=[_check("PRIMARY", "https://arxiv.org/abs/1"),
+                _check("SINGLE_SOURCE", "https://c.example/3")],
+    )
+    assert result.verdict == "PASS"
+    assert result.to_research == []
+    assert [c.support for c in result.to_leave_out] == ["SINGLE_SOURCE"]
 
 
 def test_primary_or_corroborated_claims_pass_even_if_the_model_flagged() -> None:
@@ -184,7 +199,7 @@ def test_primary_or_corroborated_claims_pass_even_if_the_model_flagged() -> None
                 _check("CORROBORATED", "https://a.example/1", "https://b.example/2")],
     )
     assert result.verdict == "PASS"
-    assert result.needs_work == []
+    assert result.to_leave_out == []
 
 
 def test_the_verdict_is_derived_when_parsed_from_a_model_reply() -> None:
@@ -192,8 +207,8 @@ def test_the_verdict_is_derived_when_parsed_from_a_model_reply() -> None:
     # the derivation has to hold on that path too, not only on construction.
     reply = (
         '{"topic": "t", "verdict": "PASS", "claims": [{"claim": "c", "citation": 1, '
-        '"support": "SINGLE_SOURCE", "sources": [{"title": "x", "url": "https://x.example"}], '
-        '"note": "one outlet only"}]}'
+        '"support": "UNSUPPORTED", "sources": [], '
+        '"note": "the source gives no date"}]}'
     )
     assert VerificationResult.model_validate_json(reply).verdict == "FLAG"
 
@@ -209,3 +224,10 @@ def test_the_verifier_is_told_what_independent_means() -> None:
         assert level in prompt
     assert "counts once" in prompt, "a republished story must not count as a second source"
     assert "WHOLE archive" in prompt, "corroboration may come from uncited archive results"
+
+
+def test_the_editor_leaves_single_source_claims_out_instead_of_researching_them() -> None:
+    from throughline.agent import EDITOR_PROMPT
+
+    assert "Do NOT re-research SINGLE_SOURCE" in EDITOR_PROMPT
+    assert "Leave every SINGLE_SOURCE claim out of the report" in EDITOR_PROMPT
