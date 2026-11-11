@@ -332,11 +332,12 @@ ALERT_KEYS = (
 _CONTEXT_KEYS = ("search_failures", "subagent_failures")
 
 
-def alert_text(signals: list[Signal], today: date | None = None) -> str | None:
-    """A short Slack message when the run needs a person to look, else None.
+def alert_reason(signals: list[Signal]) -> str | None:
+    """What went wrong, in plain lines, or None when nothing needs a person.
 
     Pure, so it is testable without Slack. Built from the signals' own comments,
-    so the alert and the trace cannot disagree about what happened.
+    so the alert, the dashboard's held-week note, and the trace cannot disagree
+    about what happened.
     """
     by_key = {s["key"]: s for s in signals}
     failing = [by_key[k] for k in ALERT_KEYS if k in by_key and by_key[k]["score"] < 1.0]
@@ -344,7 +345,6 @@ def alert_text(signals: list[Signal], today: date | None = None) -> str | None:
         return None
     produced = "report_produced" in by_key and by_key["report_produced"]["score"] >= 1.0
     lines = [
-        f"*Throughline run alert · {(today or date.today()).isoformat()}*",
         "This week's run needs a look." if produced else "No report this week.",
         *(f"• {s['comment']}" for s in failing),
         *(
@@ -352,9 +352,22 @@ def alert_text(signals: list[Signal], today: date | None = None) -> str | None:
             for k in _CONTEXT_KEYS
             if k in by_key and by_key[k]["score"] > 0
         ),
-        "The full scores are on this run's trace.",
     ]
     return "\n".join(lines)
+
+
+def alert_text(signals: list[Signal], today: date | None = None) -> str | None:
+    """A short Slack message when the run needs a person to look, else None."""
+    reason = alert_reason(signals)
+    if reason is None:
+        return None
+    return "\n".join(
+        [
+            f"*Throughline run alert · {(today or date.today()).isoformat()}*",
+            reason,
+            "The full scores are on this run's trace.",
+        ]
+    )
 
 
 # --- attaching them to the trace -------------------------------------------

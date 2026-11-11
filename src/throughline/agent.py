@@ -56,8 +56,10 @@ from throughline.config import (
 )
 from throughline.delivery import deliver_alert, deliver_report
 from throughline.models import model, strong_model
-from throughline.monitoring import alert_text
+from throughline.monitoring import _current_run_id as current_trace_id
+from throughline.monitoring import alert_reason, alert_text
 from throughline.monitoring import record as record_run_signals
+from throughline.publish import publish_run
 from throughline.quarantine import QuarantineSourcesMiddleware
 from throughline.schemas import FinalPassResult, ResearchResult, VerificationResult
 from throughline.tools import (
@@ -672,7 +674,10 @@ def renumber_citations_middleware(state, runtime) -> dict | None:
     saw it until the week had gone. So when a signal worth acting on fails, the
     same Slack channel gets a short alert saying what happened.
 
-    Delivery, scoring, and the alert are all best-effort: none breaks the run or
+    Then the run publishes itself to the public dashboard, or, when the alert
+    fired, records the week as held with the reason and no report.
+
+    Delivery, scoring, publishing, and the alert are all best-effort: none breaks the run or
     drops the report from state.
     """
     files = state.get("files")
@@ -683,7 +688,15 @@ def renumber_citations_middleware(state, runtime) -> dict | None:
         state, final_body or "", delivered=delivered, search_outage=search_outage()
     )
     alert = alert_text(signals)
+    published = publish_run(
+        final_body or "",
+        signals,
+        trace_id=current_trace_id(),
+        held_reason=alert_reason(signals),
+    )
     if alert:
+        if published == "held":
+            alert += "\nHeld back from the dashboard until reviewed."
         deliver_alert(alert)
     return update
 
