@@ -23,6 +23,7 @@ logs a secret-free ``[publish] ...`` line.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
@@ -30,12 +31,16 @@ import os
 import re
 import urllib.error
 import urllib.request
-from datetime import UTC, datetime
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 logger = logging.getLogger("throughline.publish")
 
 _API = "https://api.github.com"
 INDEX_PATH = "data/index.json"
+# How far back to look for a week's trace. Weeks normally fill a week late.
+_LOOKBACK_DAYS = 60
 _TITLE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 _TOPIC = re.compile(r"^##\s+(.+?)\s*(?:\((new|developing)\))?\s*$", re.MULTILINE | re.IGNORECASE)
 
@@ -200,29 +205,104 @@ def _write(repo: str, branch: str, path: str, token: str, data: dict, sha: str |
     _request("PUT", f"{_API}/repos/{repo}/contents/{path}", token, body)
 
 
-def _langsmith_reader():
-    """``(read_run, read_stages)`` against LangSmith, or None when not configured."""
-    try:
-        from langsmith import Client
+def pending_traces(index: dict) -> list[str]:
+    """Trace ids of the weeks whose cost is not filled in yet."""
+    return [
+        e["trace_id"]
+        for e in index.get("runs", [])
+        if e.get("cost_usd") is None and e.get("trace_id")
+    ]
 
-        client = Client()
+
+def _tracing_project() -> str | None:
+    """The tracing project this run writes to. Every week traces to the same one."""
+    try:
+        from langsmith.run_helpers import get_current_run_tree
+
+        tree = get_current_run_tree()
+    except Exception:  # noqa: BLE001 - tracing is optional
+        return None
+    return getattr(tree, "session_name", None) or None
+
+
+async def _fetch_traces(trace_ids: list[str], project_name: str) -> dict[str, tuple]:
+    """``{trace_id: (run, stages)}`` for each trace found, read from LangSmith.
+
+    ``run`` has ``total_cost`` (the whole trace), ``start_time``, and ``end_time``.
+    ``stages`` is ``stage_costs`` for a finished trace, else None. Uses the
+    project-scoped trace API that replaces ``read_run`` and ``list_runs``; a single
+    run's cost there no longer includes its children, so the total comes from the
+    trace's aggregates.
+    """
+    from langsmith import Client
+
+    client = Client()
+    project_id = str((await client.aread_project(project_name=project_name)).id)
+    now = datetime.now(UTC)
+    found: dict[str, tuple] = {}
+    for trace_id in trace_ids:
+        try:
+            trace = None
+            async for trace in client.traces.query(
+                project_id=project_id,
+                trace_ids=[trace_id],
+                min_start_time=now - timedelta(days=_LOOKBACK_DAYS),
+                max_start_time=now,
+                selects=["START_TIME", "END_TIME", "TOTAL_COST"],
+            ):
+                break
+            if trace is None:
+                continue
+            root = trace.root_run
+            run = SimpleNamespace(
+                total_cost=getattr(trace.trace_aggregates, "total_cost", None),
+                start_time=root.start_time,
+                end_time=root.end_time,
+            )
+            stages = None
+            if run.end_time is not None:
+                tasks = await client.traces.list_runs(
+                    trace_id, project_id=project_id, filter='eq(name, "task")',
+                    selects=["ID", "INPUTS"],
+                )
+                calls = await client.traces.list_runs(
+                    trace_id, project_id=project_id, filter='eq(run_type, "llm")',
+                    selects=["PARENT_RUN_IDS", "TOTAL_COST"],
+                )
+                stages = stage_costs(
+                    [{"id": t.id, "inputs": t.inputs} for t in tasks.items],
+                    [{"parent_run_ids": c.parent_run_ids, "total_cost": c.total_cost}
+                     for c in calls.items],
+                )
+            found[trace_id] = (run, stages)
+        except Exception:  # noqa: BLE001 - one unreadable trace must not stop the rest
+            continue
+    return found
+
+
+def _langsmith_reader(trace_ids: list[str]):
+    """``(read_run, read_stages)`` for these traces, or None when they can't be read.
+
+    The LangSmith calls are async and this runs at the end of the graph, possibly
+    inside a running event loop, so they run together on a worker thread with its
+    own loop.
+    """
+    project = _tracing_project()
+    if not trace_ids or not project:
+        return None
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            found = pool.submit(asyncio.run, _fetch_traces(trace_ids, project)).result(timeout=120)
     except Exception:  # noqa: BLE001 - cost backfill is optional
         return None
 
-    def read_stages(trace_id: str) -> dict[str, float]:
-        tasks = client.list_runs(
-            trace_id=trace_id, run_type="tool", filter='eq(name, "task")',
-            select=["id", "inputs"],
-        )
-        calls = client.list_runs(
-            trace_id=trace_id, run_type="llm", select=["parent_run_ids", "total_cost"],
-        )
-        return stage_costs(
-            [{"id": t.id, "inputs": t.inputs} for t in tasks],
-            [{"parent_run_ids": c.parent_run_ids, "total_cost": c.total_cost} for c in calls],
-        )
+    def read_run(trace_id: str):
+        return found[trace_id][0]
 
-    return client.read_run, read_stages
+    def read_stages(trace_id: str):
+        return found[trace_id][1]
+
+    return read_run, read_stages
 
 
 def publish_run(
@@ -254,12 +334,13 @@ def publish_run(
                f"data: {outcome} run {day}")
         index, index_sha = _read(repo, branch, INDEX_PATH, token)
         index = merge_index(index, record)
-        readers = _langsmith_reader()
-        if readers is not None:
-            fill_costs(index, *readers)
+        pending = pending_traces(index)
+        readers = _langsmith_reader(pending)
+        filled = fill_costs(index, *readers) if readers is not None else 0
         _write(repo, branch, INDEX_PATH, token, index, index_sha, f"data: index for {day}")
     except Exception as exc:  # noqa: BLE001 - publishing must not cost the run
         _log(f"failed: {type(exc).__name__} writing to {repo}@{branch}")
         return "failed"
-    _log(f"{outcome}: {day} to {repo}@{branch}")
+    _log(f"{outcome}: {day} to {repo}@{branch}; cost filled for {filled} of "
+         f"{len(pending)} week(s) still missing it")
     return outcome
