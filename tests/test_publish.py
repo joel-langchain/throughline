@@ -190,3 +190,58 @@ def test_the_alert_says_when_a_week_was_held(monkeypatch) -> None:
 
     assert calls[0]["held_reason"].startswith("No report this week.")
     assert sent and sent[0].endswith("Held back from the dashboard until reviewed.")
+
+
+# --- where the cost goes ---------------------------------------------------------
+
+
+def test_each_model_call_is_charged_to_the_subagent_that_made_it() -> None:
+    # The checker turned out to be ~80% of every run's cost; the split depends on
+    # charging a call to the task it ran under, at any depth.
+    tasks = [
+        {"id": "t-research", "inputs": {"subagent_type": "topic-researcher"}},
+        {"id": "t-check", "inputs": {"subagent_type": "citation-verifier"}},
+    ]
+    calls = [
+        {"parent_run_ids": ["root", "t-check", "agent", "model"], "total_cost": 0.5},
+        {"parent_run_ids": ["root", "t-check"], "total_cost": 0.25},
+        {"parent_run_ids": ["root", "t-research"], "total_cost": 0.1},
+        {"parent_run_ids": ["root"], "total_cost": 0.3},
+        {"parent_run_ids": None, "total_cost": None},
+    ]
+    assert publish.stage_costs(tasks, calls) == {
+        "citation-verifier": 0.75, "topic-researcher": 0.1, "editor": 0.3,
+    }
+
+
+def test_the_split_is_filled_alongside_the_total() -> None:
+    start = datetime(2026, 11, 9, 5, 0, tzinfo=UTC)
+    done = SimpleNamespace(total_cost=8.52, start_time=start, end_time=start + timedelta(minutes=26))
+    index = {"runs": [{"trace_id": "t", "cost_usd": None}]}
+    split = {"citation-verifier": 7.13, "editor": 0.8, "topic-researcher": 0.57,
+             "final-pass-reviewer": 0.03}
+    publish.fill_costs(index, lambda _t: done, lambda _t: split)
+    assert index["runs"][0]["cost_by_stage"] == split
+
+
+def test_a_failed_split_keeps_the_total() -> None:
+    start = datetime(2026, 11, 9, 5, 0, tzinfo=UTC)
+    done = SimpleNamespace(total_cost=8.52, start_time=start, end_time=start + timedelta(minutes=26))
+    index = {"runs": [{"trace_id": "t", "cost_usd": None}]}
+
+    def broken(_t):
+        raise RuntimeError("trace too large")
+
+    publish.fill_costs(index, lambda _t: done, broken)
+    assert index["runs"][0]["cost_usd"] == 8.52
+    assert "cost_by_stage" not in index["runs"][0]
+
+
+def test_a_split_that_does_not_add_up_is_left_out() -> None:
+    # Older traces carry cost on the run total only, so every stage reads $0.
+    start = datetime(2026, 9, 21, 5, 0, tzinfo=UTC)
+    done = SimpleNamespace(total_cost=21.55, start_time=start, end_time=start + timedelta(minutes=60))
+    index = {"runs": [{"trace_id": "t", "cost_usd": None}]}
+    publish.fill_costs(index, lambda _t: done, lambda _t: {"citation-verifier": 0.0, "editor": 0.0})
+    assert index["runs"][0]["cost_usd"] == 21.55
+    assert "cost_by_stage" not in index["runs"][0]

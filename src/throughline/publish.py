@@ -10,9 +10,10 @@ A run whose alert fired is not published. It is recorded as held, with the reaso
 and no report, so a broken or doubtful week never goes public unreviewed and a
 lost week still shows up as lost rather than silently missing.
 
-Cost and duration are not known until a run has ended, so each run fills them in
-for earlier weeks from their LangSmith traces. The latest week shows them a week
-late.
+Cost, cost by stage, and duration are not known until a run has ended, so each
+run fills them in for earlier weeks from their LangSmith traces. The latest week
+shows them a week late. Cost here is model calls only; search is billed by its
+own plan and is not in the trace.
 
 Configured by ``SITE_GITHUB_TOKEN`` (a token that can write this repo's contents)
 and ``SITE_REPO`` (``owner/name``), with ``SITE_BRANCH`` defaulting to ``site``.
@@ -80,6 +81,7 @@ def run_record(
         "scores": {s["key"]: s["score"] for s in signals},
         "trace_id": trace_id,
         "cost_usd": None,
+        "cost_by_stage": None,
         "duration_minutes": None,
         "report": report if held_reason is None else None,
     }
@@ -98,11 +100,31 @@ def merge_index(index: dict | None, record: dict) -> dict:
     return {"updated": datetime.now(UTC).isoformat(timespec="seconds"), "runs": runs}
 
 
-def fill_costs(index: dict, read_run) -> int:
-    """Fill cost and duration for earlier weeks from their finished traces.
+def stage_costs(task_runs: list[dict], llm_runs: list[dict]) -> dict[str, float]:
+    """Model cost per stage of one run, from its trace.
+
+    Each subagent runs inside an editor ``task`` call, so a model call belongs to
+    the subagent whose task call is among its ancestors; anything else is the
+    editor's own work (scanning, clustering, writing). Keys are the subagent
+    names, plus ``editor``.
+    """
+    stage_of = {
+        str(t["id"]): (t.get("inputs") or {}).get("subagent_type") or "other" for t in task_runs
+    }
+    totals: dict[str, float] = {}
+    for call in llm_runs:
+        ancestors = [str(p) for p in (call.get("parent_run_ids") or [])]
+        stage = next((stage_of[p] for p in ancestors if p in stage_of), "editor")
+        totals[stage] = totals.get(stage, 0.0) + float(call.get("total_cost") or 0)
+    return {stage: round(cost, 2) for stage, cost in totals.items()}
+
+
+def fill_costs(index: dict, read_run, read_stages=None) -> int:
+    """Fill cost, cost by stage, and duration for earlier weeks from their traces.
 
     ``read_run(trace_id)`` returns an object with ``total_cost``, ``start_time``,
-    and ``end_time``. Best-effort per week; returns how many weeks were filled.
+    and ``end_time``; ``read_stages(trace_id)`` returns ``stage_costs`` for it.
+    Best-effort per week; returns how many weeks were filled.
     """
     filled = 0
     for entry in index.get("runs", []):
@@ -119,6 +141,16 @@ def fill_costs(index: dict, read_run) -> int:
         entry["duration_minutes"] = round(
             (run.end_time - run.start_time).total_seconds() / 60, 1
         )
+        if read_stages is not None:
+            try:
+                stages = read_stages(entry["trace_id"])
+            except Exception:  # noqa: BLE001 - the split is a nice-to-have
+                stages = None
+            # Some traces carry cost only on the run total, not on each model
+            # call. A split that doesn't add up to the total would mislead, so
+            # it is left out.
+            if stages and entry["cost_usd"] and sum(stages.values()) >= 0.9 * entry["cost_usd"]:
+                entry["cost_by_stage"] = stages
         filled += 1
     return filled
 
@@ -169,14 +201,28 @@ def _write(repo: str, branch: str, path: str, token: str, data: dict, sha: str |
 
 
 def _langsmith_reader():
-    """``read_run`` against LangSmith, or None when it is not configured."""
+    """``(read_run, read_stages)`` against LangSmith, or None when not configured."""
     try:
         from langsmith import Client
 
         client = Client()
-        return client.read_run
     except Exception:  # noqa: BLE001 - cost backfill is optional
         return None
+
+    def read_stages(trace_id: str) -> dict[str, float]:
+        tasks = client.list_runs(
+            trace_id=trace_id, run_type="tool", filter='eq(name, "task")',
+            select=["id", "inputs"],
+        )
+        calls = client.list_runs(
+            trace_id=trace_id, run_type="llm", select=["parent_run_ids", "total_cost"],
+        )
+        return stage_costs(
+            [{"id": t.id, "inputs": t.inputs} for t in tasks],
+            [{"parent_run_ids": c.parent_run_ids, "total_cost": c.total_cost} for c in calls],
+        )
+
+    return client.read_run, read_stages
 
 
 def publish_run(
@@ -208,9 +254,9 @@ def publish_run(
                f"data: {outcome} run {day}")
         index, index_sha = _read(repo, branch, INDEX_PATH, token)
         index = merge_index(index, record)
-        reader = _langsmith_reader()
-        if reader is not None:
-            fill_costs(index, reader)
+        readers = _langsmith_reader()
+        if readers is not None:
+            fill_costs(index, *readers)
         _write(repo, branch, INDEX_PATH, token, index, index_sha, f"data: index for {day}")
     except Exception as exc:  # noqa: BLE001 - publishing must not cost the run
         _log(f"failed: {type(exc).__name__} writing to {repo}@{branch}")
