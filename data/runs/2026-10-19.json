@@ -18,5 +18,10 @@
   "trace_id": "01a15287-eae1-74f1-bcb7-dd82a5cd7e20",
   "cost_usd": 0.4,
   "duration_minutes": 3.5,
-  "report": null
+  "report": null,
+  "cost_by_stage": {
+    "editor": 0.16,
+    "general-purpose": 0.16,
+    "topic-researcher": 0.08
+  }
 }

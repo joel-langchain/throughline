@@ -47,7 +47,13 @@
       },
       "trace_id": "01a1bead-7db4-7c62-9647-087f4c80a4f7",
       "cost_usd": 8.52,
-      "duration_minutes": 26.1
+      "duration_minutes": 26.1,
+      "cost_by_stage": {
+        "editor": 0.8,
+        "final-pass-reviewer": 0.03,
+        "citation-verifier": 7.13,
+        "topic-researcher": 0.57
+      }
     },
     {
       "date": "2026-11-02",
@@ -95,7 +101,13 @@
       },
       "trace_id": "01a19aa0-f27a-7e52-ac18-967557a831fa",
       "cost_usd": 5.9,
-      "duration_minutes": 19.3
+      "duration_minutes": 19.3,
+      "cost_by_stage": {
+        "editor": 0.73,
+        "final-pass-reviewer": 0.27,
+        "citation-verifier": 4.56,
+        "topic-researcher": 0.35
+      }
     },
     {
       "date": "2026-10-26",
@@ -143,7 +155,13 @@
       },
       "trace_id": "01a17694-78fa-7512-8d1a-93074fc86190",
       "cost_usd": 9.17,
-      "duration_minutes": 37.4
+      "duration_minutes": 37.4,
+      "cost_by_stage": {
+        "editor": 0.73,
+        "final-pass-reviewer": 0.46,
+        "citation-verifier": 7.56,
+        "topic-researcher": 0.42
+      }
     },
     {
       "date": "2026-10-20",
@@ -187,7 +205,13 @@
       },
       "trace_id": "01a158ba-5ce4-77f0-ac08-7714b3c9da40",
       "cost_usd": 5.2,
-      "duration_minutes": 19.2
+      "duration_minutes": 19.2,
+      "cost_by_stage": {
+        "editor": 0.48,
+        "final-pass-reviewer": 0.01,
+        "citation-verifier": 4.38,
+        "topic-researcher": 0.33
+      }
     },
     {
       "date": "2026-10-19",
@@ -208,7 +232,12 @@
       },
       "trace_id": "01a15287-eae1-74f1-bcb7-dd82a5cd7e20",
       "cost_usd": 0.4,
-      "duration_minutes": 3.5
+      "duration_minutes": 3.5,
+      "cost_by_stage": {
+        "editor": 0.16,
+        "general-purpose": 0.16,
+        "topic-researcher": 0.08
+      }
     },
     {
       "date": "2026-10-12",
@@ -229,7 +258,11 @@
       },
       "trace_id": "01a12e7b-6a0d-78f1-8609-af75caac073f",
       "cost_usd": 0.25,
-      "duration_minutes": 2.1
+      "duration_minutes": 2.1,
+      "cost_by_stage": {
+        "editor": 0.12,
+        "topic-researcher": 0.13
+      }
     },
     {
       "date": "2026-10-05",
@@ -277,7 +310,8 @@
       },
       "trace_id": "01a10ac1-8110-7ba0-9450-a783f959d3de",
       "cost_usd": 42.64,
-      "duration_minutes": 161.7
+      "duration_minutes": 161.7,
+      "cost_by_stage": null
     },
     {
       "date": "2026-09-28",
@@ -298,7 +332,11 @@
       },
       "trace_id": "01a0e709-90a4-74a3-9132-30c665310309",
       "cost_usd": 0.25,
-      "duration_minutes": 1.6
+      "duration_minutes": 1.6,
+      "cost_by_stage": {
+        "editor": 0.12,
+        "topic-researcher": 0.13
+      }
     },
     {
       "date": "2026-09-22",
@@ -342,7 +380,13 @@
       },
       "trace_id": "01a0ca06-06c9-7441-8f23-3e548946a019",
       "cost_usd": 6.21,
-      "duration_minutes": 23.8
+      "duration_minutes": 23.8,
+      "cost_by_stage": {
+        "editor": 0.56,
+        "final-pass-reviewer": 0.01,
+        "citation-verifier": 5.28,
+        "topic-researcher": 0.36
+      }
     },
     {
       "date": "2026-09-21",
@@ -386,7 +430,8 @@
       },
       "trace_id": "01a0c255-dc95-7b22-bda0-464e1eefe85d",
       "cost_usd": 21.55,
-      "duration_minutes": 59.9
+      "duration_minutes": 59.9,
+      "cost_by_stage": null
     },
     {
       "date": "2026-09-14",
@@ -434,7 +479,8 @@
       },
       "trace_id": "01a09e6f-75be-72b3-96a6-2462687d4f35",
       "cost_usd": 16.89,
-      "duration_minutes": 52.9
+      "duration_minutes": 52.9,
+      "cost_by_stage": null
     }
   ]
 }

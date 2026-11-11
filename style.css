@@ -10,6 +10,8 @@
   --ring: rgba(11, 11, 11, 0.10);
   --series-1: #2a78d6;
   --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
   --none: #c3c2b7;
   --wash: rgba(42, 120, 214, 0.08);
   --link: #1c5cab;
@@ -27,6 +29,8 @@
     --ring: rgba(255, 255, 255, 0.10);
     --series-1: #3987e5;
     --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
     --none: #52514e;
     --wash: rgba(57, 135, 229, 0.12);
     --link: #86b6ef;
@@ -44,6 +48,8 @@
   --ring: rgba(255, 255, 255, 0.10);
   --series-1: #3987e5;
   --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
   --none: #52514e;
   --wash: rgba(57, 135, 229, 0.12);
   --link: #86b6ef;

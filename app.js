@@ -78,10 +78,17 @@ function renderTiles() {
   const tiles = [
     ["Reports published", String(published.length), `since ${shortDate(state.runs[0].date)}`],
     ["Scheduled runs with no report", String(held.length), "shown in grey below"],
-    ["Median cost per report", fmt.usd(median(published.map((r) => r.cost_usd))), "model calls and search"],
+    ["Median cost per report", fmt.usd(median(published.map((r) => r.cost_usd))), "model calls only"],
+    ["Spent to date", fmt.usd(state.runs.reduce((sum, r) => sum + (r.cost_usd || 0), 0)),
+      `model calls, ${state.runs.length} runs`],
     ["Median run time", fmt.min(median(published.map((r) => r.duration_minutes))), "start to published"],
     ["Sources in the latest report", fmt.int(latest && score(latest, "source_count")), latest ? shortDate(latest.date) : ""],
   ];
+  const lastSplit = [...published].reverse().find((r) => r.cost_by_stage && r.cost_usd);
+  if (lastSplit) {
+    const share = stageSplit(lastSplit)["citation-verifier"] / lastSplit.cost_usd;
+    tiles.push(["Citation checking's share of cost", fmt.pct(share), `${shortDate(lastSplit.date)} run`]);
+  }
   const corroborated = latest && score(latest, "claims_corroborated");
   if (corroborated != null) {
     tiles.push(["Claims corroborated, latest", fmt.pct(corroborated), "primary source or two independent ones"]);
@@ -324,6 +331,82 @@ function stackedTopics(container) {
   }, (i) => (counts[i] ? `${shortDate(state.runs[i].date)}: ${counts[i].fresh} new, ${counts[i].dev} developing` : `${shortDate(state.runs[i].date)}: no report`));
 }
 
+// Bottom to top. Anything unexpected (the general-purpose helper, say) is counted
+// as editing, since the editor is what called it.
+const STAGES = [
+  ["citation-verifier", "Citation checking", "--series-1"],
+  ["editor", "Editing", "--series-2"],
+  ["topic-researcher", "Research", "--series-3"],
+  ["final-pass-reviewer", "Final review", "--series-4"],
+];
+
+function stageSplit(run) {
+  if (!run.cost_by_stage) return null;
+  const known = new Set(STAGES.map(([k]) => k));
+  const split = Object.fromEntries(STAGES.map(([k]) => [k, run.cost_by_stage[k] || 0]));
+  for (const [k, v] of Object.entries(run.cost_by_stage)) if (!known.has(k)) split.editor += v;
+  return split;
+}
+
+function stackedCost(container) {
+  const colors = Object.fromEntries(STAGES.map(([k, , v]) => [k, css(v)]));
+  const none = css("--none");
+  const { card, plot } = chartCard({
+    title: "Cost per run, by stage",
+    sub: "Model calls, in US dollars. Search is billed separately and not included.",
+    legend: [...STAGES.map(([k, label]) => [label, colors[k]]), ["Not broken down", none]],
+  });
+  container.append(card);
+  const totals = state.runs.map((r) => r.cost_usd);
+  const ctx = frame(plot, {
+    ...niceScale(Math.max(...totals.filter((v) => v != null), 0)),
+    yFormat: (v) => `$${Math.round(v)}`, label: "Cost per run, by stage",
+  });
+  const bw = Math.min(24, ctx.band * 0.6);
+  const marks = state.runs.map((run, i) => {
+    if (run.cost_usd == null) return null;
+    const x = ctx.xc(i) - bw / 2;
+    const g = s("g", { class: "mark" }, ctx.svg);
+    const split = stageSplit(run);
+    // Older traces kept cost on the run total only, so those weeks are one grey bar.
+    const parts = split
+      ? STAGES.map(([k]) => [colors[k], split[k]]).filter(([, v]) => v > 0)
+      : [[none, run.cost_usd]];
+    let base = ctx.y(0);
+    parts.forEach(([color, v], j) => {
+      // Square segments with a 2px surface gap between them; only the top one is rounded.
+      const segment = ctx.y(0) - ctx.y(v);
+      const gap = j > 0 ? 1 : 0;
+      const top = j === parts.length - 1;
+      const height = Math.max(segment - gap - (top ? 0 : 1), 0);
+      if (top) s("path", { d: barPath(x, base - gap, bw, height, 4), fill: color }, g);
+      else s("rect", { x, y: base - gap - height, width: bw, height, fill: color }, g);
+      base -= segment;
+    });
+    return g;
+  });
+  const last = state.runs.length - 1;
+  if (totals[last] != null) {
+    const t = s("text", { class: "direct", x: ctx.xc(last), y: ctx.y(totals[last]) - 6, "text-anchor": "middle" }, ctx.svg);
+    t.textContent = fmt.usd(totals[last]);
+  }
+  hitBands(ctx, (i) => {
+    marks.forEach((m, j) => m && m.classList.toggle("active", j === i));
+    if (i == null) return;
+    const run = state.runs[i];
+    const split = stageSplit(run);
+    const rows = [[css("--axis"), fmt.usd(run.cost_usd), "total"]];
+    if (split) {
+      for (const [k, label] of [...STAGES].reverse()) {
+        if (split[k] > 0) rows.push([colors[k], fmt.usd(split[k]), label]);
+      }
+    } else if (run.cost_usd != null) {
+      rows.push([none, "", "not broken down"]);
+    }
+    showTip(ctx, i, rows);
+  }, (i) => `${shortDate(state.runs[i].date)}: ${fmt.usd(state.runs[i].cost_usd)}`);
+}
+
 function lineChart(container, { title, sub, series }) {
   const present = series.filter((sr) => state.runs.some((r) => sr.value(r) != null));
   const legend = present.length > 1 ? present.map((sr) => [sr.label, sr.color, "line"]) : null;
@@ -382,10 +465,7 @@ function renderCharts() {
     value: (r) => score(r, "source_count"), format: fmt.int, yFormat: fmt.int,
   });
   stackedTopics(root);
-  columnChart(root, {
-    title: "Cost per run", sub: "Model calls and search, in US dollars",
-    value: (r) => r.cost_usd, format: fmt.usd, yFormat: (v) => `$${Math.round(v)}`, withHeld: true,
-  });
+  stackedCost(root);
   columnChart(root, {
     title: "Run time", sub: "Minutes from start to finish",
     value: (r) => r.duration_minutes, format: fmt.min, yFormat: (v) => String(Math.round(v)), withHeld: true,
@@ -395,7 +475,8 @@ function renderCharts() {
 // --- table view ------------------------------------------------------------------
 
 function renderTable() {
-  const head = ["Week", "Status", "Topics", "Sources", "Trusted sites", "Claims corroborated", "Cost", "Run time"];
+  const head = ["Week", "Status", "Topics", "Sources", "Trusted sites", "Claims corroborated", "Cost",
+    ...STAGES.map(([, label]) => label), "Run time"];
   const rows = [...state.runs].reverse().map((r) => [
     shortDate(r.date),
     r.published ? "Published" : "No report",
@@ -404,6 +485,10 @@ function renderTable() {
     r.published ? fmt.pct(score(r, "source_quality")) : "–",
     r.published ? fmt.pct(score(r, "claims_corroborated")) : "–",
     fmt.usd(r.cost_usd),
+    ...STAGES.map(([k]) => {
+      const split = stageSplit(r);
+      return split ? fmt.usd(split[k]) : "–";
+    }),
     fmt.min(r.duration_minutes),
   ]);
   document.getElementById("table").replaceChildren(
