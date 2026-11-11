@@ -1,0 +1,440 @@
+{
+  "updated": "2026-11-11T09:57:11+00:00",
+  "runs": [
+    {
+      "date": "2026-11-09",
+      "title": "Throughline — This Week in AI · 2026-11-09",
+      "published": true,
+      "held_reason": null,
+      "topics": [
+        {
+          "name": "Democrats Sweep the Midterms — Federal AI Regulation Reawakens",
+          "status": "developing"
+        },
+        {
+          "name": "Enterprise AI Agents: From Theoretical Risk to Documented Liability",
+          "status": "developing"
+        },
+        {
+          "name": "GPT-6 Cyber: OpenAI's First \"Critical\"-Rated Model Released Under Restricted Access",
+          "status": "developing"
+        },
+        {
+          "name": "Tencent Hy4 Enters the Open-Weight Frontier",
+          "status": "new"
+        },
+        {
+          "name": "Accenture's Hallucinated Research Paper — and the Three-Publication Reckoning",
+          "status": "new"
+        }
+      ],
+      "scores": {
+        "citation_integrity": 1.0,
+        "dedup": 1.0,
+        "delivery_ok": 1.0,
+        "final_pass_revisions": 1.0,
+        "groundedness": 0.739,
+        "report_produced": 1.0,
+        "search_failures": 0.0,
+        "source_archive_ok": 1.0,
+        "source_count": 27.0,
+        "source_quality": 0.318,
+        "subagent_failures": 0.0,
+        "topic_count": 5.0,
+        "topics_kept": 7.0,
+        "verification_flags": 5.0,
+        "voice": 1.0
+      },
+      "trace_id": "01a1bead-7db4-7c62-9647-087f4c80a4f7",
+      "cost_usd": 8.52,
+      "duration_minutes": 26.1
+    },
+    {
+      "date": "2026-11-02",
+      "title": "Throughline — This Week in AI · 2026-11-02",
+      "published": true,
+      "held_reason": null,
+      "topics": [
+        {
+          "name": "Google Gemini 4 Carbon",
+          "status": "new"
+        },
+        {
+          "name": "Mistral Large 4: Europe's Open-Weight Answer",
+          "status": "new"
+        },
+        {
+          "name": "Human Oversight Is Not What We Thought",
+          "status": "new"
+        },
+        {
+          "name": "AI Infrastructure: Wall Street Goes All-In",
+          "status": "developing"
+        },
+        {
+          "name": "AI Regulation Races the Midterm Clock",
+          "status": "developing"
+        }
+      ],
+      "scores": {
+        "citation_integrity": 1.0,
+        "dedup": 1.0,
+        "delivery_ok": 1.0,
+        "final_pass_revisions": 1.0,
+        "groundedness": 0.75,
+        "report_produced": 1.0,
+        "search_failures": 0.0,
+        "source_archive_ok": 1.0,
+        "source_count": 19.0,
+        "source_quality": 0.471,
+        "subagent_failures": 0.0,
+        "topic_count": 5.0,
+        "topics_kept": 8.0,
+        "verification_flags": 6.0,
+        "voice": 1.0
+      },
+      "trace_id": "01a19aa0-f27a-7e52-ac18-967557a831fa",
+      "cost_usd": 5.9,
+      "duration_minutes": 19.3
+    },
+    {
+      "date": "2026-10-26",
+      "title": "Throughline — This Week in AI · 2026-10-26",
+      "published": true,
+      "held_reason": null,
+      "topics": [
+        {
+          "name": "AI Agents in the Criminal Underground",
+          "status": "developing"
+        },
+        {
+          "name": "The Internet Is Being Rebuilt for Machines",
+          "status": "developing"
+        },
+        {
+          "name": "AI Biology's Triple Advance in Genomics",
+          "status": "new"
+        },
+        {
+          "name": "Congress Starts Building AI Expertise",
+          "status": "developing"
+        },
+        {
+          "name": "Open-Weight Models and the Safe Harbor Question",
+          "status": "developing"
+        }
+      ],
+      "scores": {
+        "citation_integrity": 1.0,
+        "dedup": 1.0,
+        "delivery_ok": 1.0,
+        "final_pass_revisions": 2.0,
+        "groundedness": 0.909,
+        "report_produced": 1.0,
+        "search_failures": 0.0,
+        "source_archive_ok": 1.0,
+        "source_count": 18.0,
+        "source_quality": 0.412,
+        "subagent_failures": 0.0,
+        "topic_count": 5.0,
+        "topics_kept": 7.0,
+        "verification_flags": 4.0,
+        "voice": 1.0
+      },
+      "trace_id": "01a17694-78fa-7512-8d1a-93074fc86190",
+      "cost_usd": 9.17,
+      "duration_minutes": 37.4
+    },
+    {
+      "date": "2026-10-20",
+      "title": "Throughline — This Week in AI · 2026-10-20",
+      "published": true,
+      "held_reason": null,
+      "topics": [
+        {
+          "name": "Meta Bets Big on Open Weights — With Caveats",
+          "status": "new"
+        },
+        {
+          "name": "DeepSeek Quietly Improves Its Flash Model",
+          "status": "developing"
+        },
+        {
+          "name": "Anthropic's Safety Bill and the $50M Election Machine",
+          "status": "developing"
+        },
+        {
+          "name": "When Claude Had Nothing to Do, It Started Playing",
+          "status": "new"
+        }
+      ],
+      "scores": {
+        "citation_integrity": 1.0,
+        "dedup": 1.0,
+        "delivery_ok": 1.0,
+        "final_pass_revisions": 0.0,
+        "groundedness": 0.846,
+        "report_produced": 1.0,
+        "search_failures": 0.0,
+        "source_archive_ok": 1.0,
+        "source_count": 14.0,
+        "source_quality": 0.429,
+        "subagent_failures": 0.0,
+        "topic_count": 4.0,
+        "topics_kept": 4.0,
+        "verification_flags": 3.0,
+        "voice": 1.0
+      },
+      "trace_id": "01a158ba-5ce4-77f0-ac08-7714b3c9da40",
+      "cost_usd": 5.2,
+      "duration_minutes": 19.2
+    },
+    {
+      "date": "2026-10-19",
+      "title": null,
+      "published": false,
+      "held_reason": "No report this week.\n• The search service refused every request because the plan's usage limit had been reached.\n• 39 searches failed.",
+      "topics": [],
+      "scores": {
+        "final_pass_revisions": 0.0,
+        "report_produced": 0.0,
+        "search_failures": 39.0,
+        "source_archive_ok": 0.0,
+        "source_count": 0.0,
+        "subagent_failures": 1.0,
+        "topic_count": 0.0,
+        "topics_kept": 0.0,
+        "verification_flags": 0.0
+      },
+      "trace_id": "01a15287-eae1-74f1-bcb7-dd82a5cd7e20",
+      "cost_usd": 0.4,
+      "duration_minutes": 3.5
+    },
+    {
+      "date": "2026-10-12",
+      "title": null,
+      "published": false,
+      "held_reason": "No report this week.\n• The search service refused every request because the plan's usage limit had been reached.\n• 63 searches failed.",
+      "topics": [],
+      "scores": {
+        "final_pass_revisions": 0.0,
+        "report_produced": 0.0,
+        "search_failures": 63.0,
+        "source_archive_ok": 0.0,
+        "source_count": 0.0,
+        "subagent_failures": 0.0,
+        "topic_count": 0.0,
+        "topics_kept": 0.0,
+        "verification_flags": 0.0
+      },
+      "trace_id": "01a12e7b-6a0d-78f1-8609-af75caac073f",
+      "cost_usd": 0.25,
+      "duration_minutes": 2.1
+    },
+    {
+      "date": "2026-10-05",
+      "title": "Throughline — This Week in AI · October 5, 2026",
+      "published": true,
+      "held_reason": null,
+      "topics": [
+        {
+          "name": "OpenAI Shelves GPT-6.1 Astra",
+          "status": "developing"
+        },
+        {
+          "name": "Intelligence-Explosion Warning From Across the Labs",
+          "status": "new"
+        },
+        {
+          "name": "Chinese AI Agents Show the Same Deceptive Behaviors",
+          "status": "developing"
+        },
+        {
+          "name": "AI Agents Flood the Workforce and the Shopping Cart",
+          "status": "developing"
+        },
+        {
+          "name": "US AI Regulation Tightens From Two Directions",
+          "status": "developing"
+        }
+      ],
+      "scores": {
+        "citation_integrity": 1.0,
+        "dedup": 1.0,
+        "delivery_ok": 1.0,
+        "final_pass_revisions": 2.0,
+        "groundedness": 0.75,
+        "report_produced": 1.0,
+        "search_failures": 361.0,
+        "source_archive_ok": 1.0,
+        "source_count": 14.0,
+        "source_quality": 0.583,
+        "subagent_failures": 0.0,
+        "topic_count": 5.0,
+        "topics_kept": 5.0,
+        "verification_flags": 3.0,
+        "voice": 1.0
+      },
+      "trace_id": "01a10ac1-8110-7ba0-9450-a783f959d3de",
+      "cost_usd": 42.64,
+      "duration_minutes": 161.7
+    },
+    {
+      "date": "2026-09-28",
+      "title": null,
+      "published": false,
+      "held_reason": "No report this week.\n• The search service refused every request because the plan's usage limit had been reached.\n• 72 searches failed.",
+      "topics": [],
+      "scores": {
+        "final_pass_revisions": 0.0,
+        "report_produced": 0.0,
+        "search_failures": 72.0,
+        "source_archive_ok": 0.0,
+        "source_count": 0.0,
+        "subagent_failures": 0.0,
+        "topic_count": 0.0,
+        "topics_kept": 0.0,
+        "verification_flags": 0.0
+      },
+      "trace_id": "01a0e709-90a4-74a3-9132-30c665310309",
+      "cost_usd": 0.25,
+      "duration_minutes": 1.6
+    },
+    {
+      "date": "2026-09-22",
+      "title": "Throughline — This Week in AI · September 22, 2026",
+      "published": true,
+      "held_reason": null,
+      "topics": [
+        {
+          "name": "Rogue Agents Reach the UN",
+          "status": "developing"
+        },
+        {
+          "name": "Safety Calls Meet IPO Calendars",
+          "status": "developing"
+        },
+        {
+          "name": "AI in Science: Faster Work, More Checking",
+          "status": "new"
+        },
+        {
+          "name": "AI Infrastructure: Capital Locks In",
+          "status": "developing"
+        }
+      ],
+      "scores": {
+        "citation_integrity": 1.0,
+        "dedup": 1.0,
+        "delivery_ok": 1.0,
+        "final_pass_revisions": 0.0,
+        "groundedness": 1.0,
+        "report_produced": 1.0,
+        "search_failures": 0.0,
+        "source_archive_ok": 1.0,
+        "source_count": 16.0,
+        "source_quality": 0.375,
+        "subagent_failures": 1.0,
+        "topic_count": 4.0,
+        "topics_kept": 7.0,
+        "verification_flags": 6.0,
+        "voice": 1.0
+      },
+      "trace_id": "01a0ca06-06c9-7441-8f23-3e548946a019",
+      "cost_usd": 6.21,
+      "duration_minutes": 23.8
+    },
+    {
+      "date": "2026-09-21",
+      "title": "Throughline — This Week in AI · 2026-09-21",
+      "published": true,
+      "held_reason": null,
+      "topics": [
+        {
+          "name": "AI Wins the Metaculus Forecasting Cup — Outright",
+          "status": "new"
+        },
+        {
+          "name": "Research Papers as Autonomous Scientific Agents",
+          "status": "new"
+        },
+        {
+          "name": "The Race vs. Safety Contradiction Hardens",
+          "status": "developing"
+        },
+        {
+          "name": "California Acts; Washington Stalls",
+          "status": "developing"
+        }
+      ],
+      "scores": {
+        "citation_integrity": 1.0,
+        "dedup": 1.0,
+        "delivery_ok": 1.0,
+        "final_pass_revisions": 1.0,
+        "groundedness": 0.786,
+        "report_produced": 1.0,
+        "search_failures": 0.0,
+        "source_archive_ok": 1.0,
+        "source_count": 12.0,
+        "source_quality": 0.909,
+        "subagent_failures": 0.0,
+        "topic_count": 4.0,
+        "topics_kept": 5.0,
+        "verification_flags": 3.0,
+        "voice": 1.0
+      },
+      "trace_id": "01a0c255-dc95-7b22-bda0-464e1eefe85d",
+      "cost_usd": 21.55,
+      "duration_minutes": 59.9
+    },
+    {
+      "date": "2026-09-14",
+      "title": "Throughline — This Week in AI · September 14, 2026",
+      "published": true,
+      "held_reason": null,
+      "topics": [
+        {
+          "name": "The Rogue-Agent Swarm Keeps Growing",
+          "status": "developing"
+        },
+        {
+          "name": "GPT-6 Astra Ships — and the AGI Debate Restarts",
+          "status": "developing"
+        },
+        {
+          "name": "Congress Wakes Up to Extinction Risk",
+          "status": "new"
+        },
+        {
+          "name": "Agents Are Expensive — and the Numbers Are Now Public",
+          "status": "new"
+        },
+        {
+          "name": "NASA and IBM Open-Source a Foundation Model for the Moon",
+          "status": "new"
+        }
+      ],
+      "scores": {
+        "citation_integrity": 1.0,
+        "dedup": 1.0,
+        "delivery_ok": 1.0,
+        "final_pass_revisions": 0.0,
+        "groundedness": 0.692,
+        "report_produced": 1.0,
+        "search_failures": 0.0,
+        "source_archive_ok": 1.0,
+        "source_count": 16.0,
+        "source_quality": 0.571,
+        "subagent_failures": 0.0,
+        "topic_count": 5.0,
+        "topics_kept": 8.0,
+        "verification_flags": 4.0,
+        "voice": 1.0
+      },
+      "trace_id": "01a09e6f-75be-72b3-96a6-2462687d4f35",
+      "cost_usd": 16.89,
+      "duration_minutes": 52.9
+    }
+  ]
+}

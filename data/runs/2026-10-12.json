@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-12",
+  "title": null,
+  "published": false,
+  "held_reason": "No report this week.\n• The search service refused every request because the plan's usage limit had been reached.\n• 63 searches failed.",
+  "topics": [],
+  "scores": {
+    "final_pass_revisions": 0.0,
+    "report_produced": 0.0,
+    "search_failures": 63.0,
+    "source_archive_ok": 0.0,
+    "source_count": 0.0,
+    "subagent_failures": 0.0,
+    "topic_count": 0.0,
+    "topics_kept": 0.0,
+    "verification_flags": 0.0
+  },
+  "trace_id": "01a12e7b-6a0d-78f1-8609-af75caac073f",
+  "cost_usd": 0.25,
+  "duration_minutes": 2.1,
+  "report": null
+}
