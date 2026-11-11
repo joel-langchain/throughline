@@ -1,40 +1,6 @@
 {
-  "updated": "2026-11-11T17:02:42+00:00",
+  "updated": "2026-11-11T09:57:11+00:00",
   "runs": [
-    {
-      "date": "2026-11-11",
-      "title": "Throughline delivery test · 2026-11-11",
-      "published": true,
-      "held_reason": null,
-      "topics": [
-        {
-          "name": "Delivery and publishing check",
-          "status": "new"
-        }
-      ],
-      "scores": {
-        "report_produced": 1.0,
-        "topic_count": 1.0,
-        "source_count": 1.0,
-        "search_available": 1.0,
-        "source_archive_ok": 1.0,
-        "search_failures": 0.0,
-        "subagent_failures": 0.0,
-        "topics_kept": 0.0,
-        "verification_flags": 0.0,
-        "final_pass_revisions": 0.0,
-        "delivery_ok": 1.0,
-        "source_quality": 0.0,
-        "groundedness": 1.0,
-        "citation_integrity": 1.0,
-        "voice": 1.0,
-        "dedup": 1.0
-      },
-      "trace_id": "01a1cb8f-b03f-7921-9107-3da75e91aae2",
-      "cost_usd": null,
-      "cost_by_stage": null,
-      "duration_minutes": null
-    },
     {
       "date": "2026-11-09",
       "title": "Throughline — This Week in AI · 2026-11-09",
