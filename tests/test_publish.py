@@ -139,7 +139,7 @@ def _configure(monkeypatch, fake):
     monkeypatch.setenv("SITE_GITHUB_TOKEN", "ghp_test_token_value")
     monkeypatch.setenv("SITE_REPO", "someone/throughline")
     monkeypatch.setattr(publish, "_request", fake)
-    monkeypatch.setattr(publish, "_langsmith_reader", lambda: None)
+    monkeypatch.setattr(publish, "_langsmith_reader", lambda _ids: None)
 
 
 def test_nothing_is_published_without_configuration() -> None:
@@ -245,3 +245,113 @@ def test_a_split_that_does_not_add_up_is_left_out() -> None:
     publish.fill_costs(index, lambda _t: done, lambda _t: {"citation-verifier": 0.0, "editor": 0.0})
     assert index["runs"][0]["cost_usd"] == 21.55
     assert "cost_by_stage" not in index["runs"][0]
+
+
+# --- reading the traces ------------------------------------------------------------
+# read_run and list_runs are removed from the LangSmith SDK after 31 Jan 2027.
+# Their replacements are project-scoped and async, and a run's own cost no longer
+# includes its children, so the total comes from the trace's aggregates.
+
+
+class _FakeTraceAPI:
+    def __init__(self, traces: dict, runs: dict):
+        self.traces, self.runs, self.listed = traces, runs, []
+
+    def query(self, *, project_id, trace_ids, **_):
+        assert project_id == "p1"
+
+        async def found():
+            for trace_id in trace_ids:
+                if trace_id in self.traces:
+                    yield self.traces[trace_id]
+
+        return found()
+
+    async def list_runs(self, trace_id, *, project_id, filter, selects):
+        assert project_id == "p1"
+        self.listed.append(trace_id)
+        kind = "task" if '"task"' in filter else "llm"
+        return SimpleNamespace(items=self.runs[trace_id][kind])
+
+
+def _fake_langsmith(monkeypatch, api: _FakeTraceAPI) -> None:
+    import langsmith
+
+    async def aread_project(*, project_name):
+        assert project_name == "throughline-prod"
+        return SimpleNamespace(id="p1")
+
+    client = SimpleNamespace(traces=api, aread_project=aread_project)
+    monkeypatch.setattr(langsmith, "Client", lambda: client)
+
+
+def test_costs_are_read_with_the_trace_api(monkeypatch) -> None:
+    import asyncio
+
+    start = datetime(2026, 11, 9, 5, 0, tzinfo=UTC)
+    trace = SimpleNamespace(
+        root_run=SimpleNamespace(start_time=start, end_time=start + timedelta(minutes=26)),
+        trace_aggregates=SimpleNamespace(total_cost=8.52394955),
+    )
+    running = SimpleNamespace(
+        root_run=SimpleNamespace(start_time=start, end_time=None),
+        trace_aggregates=SimpleNamespace(total_cost=1.0),
+    )
+    api = _FakeTraceAPI(
+        {"done": trace, "running": running},
+        {"done": {
+            "task": [SimpleNamespace(id="t-check", inputs={"subagent_type": "citation-verifier"})],
+            "llm": [SimpleNamespace(parent_run_ids=["root", "t-check"], total_cost=7.13),
+                    SimpleNamespace(parent_run_ids=["root"], total_cost=1.39)],
+        }},
+    )
+    _fake_langsmith(monkeypatch, api)
+
+    found = asyncio.run(publish._fetch_traces(["done", "running", "gone"], "throughline-prod"))
+
+    assert set(found) == {"done", "running"}, "a trace that can't be found is skipped"
+    run, stages = found["done"]
+    assert run.total_cost == 8.52394955
+    assert stages == {"citation-verifier": 7.13, "editor": 1.39}
+    assert found["running"][1] is None, "no split while the run is still going"
+    assert api.listed == ["done", "done"]
+
+    index = {"runs": [{"trace_id": "done", "cost_usd": None}]}
+    publish.fill_costs(index, lambda t: found[t][0], lambda t: found[t][1])
+    assert index["runs"][0]["cost_usd"] == 8.52
+    assert index["runs"][0]["duration_minutes"] == 26.0
+
+
+def test_the_lookup_works_from_inside_a_running_event_loop(monkeypatch) -> None:
+    # The end-of-run hook may run inside the server's event loop, where
+    # asyncio.run would refuse to start.
+    import asyncio
+
+    monkeypatch.setattr(publish, "_tracing_project", lambda: "throughline-prod")
+    run = SimpleNamespace(total_cost=1.0, start_time=None, end_time=None)
+
+    async def fake_fetch(trace_ids, project):
+        return {t: (run, {"editor": 1.0}) for t in trace_ids}
+
+    monkeypatch.setattr(publish, "_fetch_traces", fake_fetch)
+
+    async def inside_a_loop():
+        return publish._langsmith_reader(["t"])
+
+    read_run, read_stages = asyncio.run(inside_a_loop())
+    assert read_run("t") is run
+    assert read_stages("t") == {"editor": 1.0}
+
+
+def test_no_tracing_project_means_no_cost_lookup(monkeypatch) -> None:
+    monkeypatch.setattr(publish, "_tracing_project", lambda: None)
+    assert publish._langsmith_reader(["t"]) is None
+
+
+def test_only_weeks_missing_a_cost_are_looked_up() -> None:
+    index = {"runs": [
+        {"trace_id": "a", "cost_usd": None},
+        {"trace_id": "b", "cost_usd": 5.9},
+        {"trace_id": None, "cost_usd": None},
+    ]}
+    assert publish.pending_traces(index) == ["a"]

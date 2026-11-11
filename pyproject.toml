@@ -18,7 +18,7 @@ dependencies = [
     "langchain>=1.4.0,<1.5",
     "langchain-anthropic>=1.7.2,<1.8",
     "langgraph>=1.2.11,<1.3",
-    "langsmith",
+    "langsmith>=0.12.4",  # client.traces (cost lookup); read_run/list_runs go after Jan 2027
     "python-dotenv",
     "tavily-python",
 ]
