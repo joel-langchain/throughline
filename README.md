@@ -314,6 +314,19 @@ Which models are used is **code config**, not env — edit `WORKER_MODEL` /
 `EDITOR_MODEL` in [models.py](src/throughline/models.py). `TAVILY_API_KEY` still
 needs a real Tavily key — web search isn't gatewayed.
 
+**Publish to a dashboard** (optional). With these two set, each finished run adds
+its report, topics, and scores to the repo's `site` branch, which GitHub Pages
+serves as a read-only dashboard: the reports week by week, and the run's own
+scores, cost, and run time over time. Visitors can only read what the weekly run
+published; nothing on the page can start a run. A run whose alert fired is
+recorded as held, with the reason and no report, so a doubtful week is never
+published unreviewed.
+
+```
+SITE_GITHUB_TOKEN=github_pat_...   # fine-grained, Contents read/write on this repo only
+SITE_REPO=owner/throughline
+```
+
 **Deliver to Slack** (optional). Add these as deployment secrets and each finished
 run posts a summary to the channel with the full report in its thread:
 

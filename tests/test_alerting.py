@@ -49,7 +49,8 @@ def _clean(monkeypatch):
     """No real client, no outage left over, and no developer Slack config."""
     monkeypatch.setattr(tools, "_tavily", None)
     tools.reset_search_outage()
-    for var in ("SLACK_BOT_TOKEN", "SLACK_CHANNEL_ID", "SLACK_WEBHOOK_URL"):
+    for var in ("SLACK_BOT_TOKEN", "SLACK_CHANNEL_ID", "SLACK_WEBHOOK_URL",
+                "SITE_GITHUB_TOKEN", "SITE_REPO"):
         monkeypatch.delenv(var, raising=False)
     yield
     tools.reset_search_outage()
