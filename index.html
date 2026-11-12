@@ -34,12 +34,9 @@
     <h1>Throughline</h1>
     <p>An AI agent that reads the week's AI news every Monday and writes one report, with every claim cited. After each run it publishes the report and its own scores here.</p>
     <div class="hero-buttons">
-      <a class="btn btn-primary" href="#reports">Read this week's report</a>
       <a class="btn btn-outline" href="https://github.com/joel-langchain/throughline">Code on GitHub</a>
     </div>
   </header>
-
-  <div class="tiles" id="tiles" aria-label="Summary"></div>
 
   <section id="reports" aria-labelledby="reports-h">
     <span class="section-label">Reports</span>
@@ -56,6 +53,7 @@
     <span class="section-label">Analytics</span>
     <h2 id="time-h">How each run went</h2>
     <p class="lede">Every run scores itself when it finishes. These charts are those scores, one point per run.</p>
+    <div class="tiles" id="tiles" aria-label="Totals across all runs"></div>
     <div class="charts" id="charts"></div>
     <details>
       <summary>Data table</summary>

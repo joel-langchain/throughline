@@ -190,6 +190,7 @@ nav.top .brand:hover { text-decoration: none; }
 /* --- sections and cards --------------------------------------------------------------- */
 
 section { margin-top: 64px; }
+.hero + section { margin-top: 48px; }
 section h2 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; margin: 0 0 6px; }
 .lede { color: var(--ink-2); font-size: 15px; margin: 0 0 20px; max-width: 72ch; }
 
@@ -203,7 +204,7 @@ section h2 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; margin: 0 0
 @media (min-width: 768px) { .report-card { padding: 28px 32px; } }
 
 /* stat tiles */
-.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 40px; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
 @media (min-width: 720px) { .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .tile { padding: 16px 18px; }
 .tile .label { font-size: 13px; font-weight: 500; color: var(--ink-2); }
@@ -220,6 +221,11 @@ section h2 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; margin: 0 0
 }
 .weeks button:hover { background: var(--surface-2); }
 .weeks button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.weeks button .latest-mark {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--link); margin-left: 6px;
+}
+.weeks button[aria-pressed="true"] .latest-mark { color: inherit; opacity: 0.85; }
 .weeks button.held { color: var(--muted); }
 .weeks button.held[aria-pressed="true"] { color: var(--surface); background: var(--muted); border-color: var(--muted); }
 
@@ -232,6 +238,12 @@ section h2 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; margin: 0 0
   display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
   border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px;
   margin-left: 8px; color: var(--ink-2); vertical-align: 2px; white-space: nowrap;
+}
+
+.tag.latest {
+  margin: 0 8px 0 0; vertical-align: 1px;
+  color: var(--link); background: var(--wash); border-color: transparent;
+  text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; font-weight: 700;
 }
 
 /* rendered report */

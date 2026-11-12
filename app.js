@@ -103,18 +103,35 @@ function renderTiles() {
 
 // --- reports -----------------------------------------------------------------
 
+// The newest week with a report. The page opens on it.
+function latestReport() {
+  return [...state.runs].reverse().find((r) => r.published);
+}
+
+// How long ago a run's date was, in the viewer's own words: "today", "3 days ago".
+function age(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const days = Math.floor((Date.now() - Date.UTC(y, m - 1, d)) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  return `${days} days ago`;
+}
+
 function renderWeeks() {
   const root = document.getElementById("weeks");
   const newest = [...state.runs].reverse();
-  root.replaceChildren(...newest.map((run) =>
-    h("button", {
+  const latest = latestReport();
+  root.replaceChildren(...newest.map((run) => {
+    const isLatest = latest && run.date === latest.date;
+    return h("button", {
       type: "button",
       class: run.published ? "" : "held",
       "aria-pressed": "false",
       "data-date": run.date,
-      "aria-label": `${longDate(run.date)}${run.published ? "" : ", no report"}`,
+      "aria-label": `${longDate(run.date)}${isLatest ? ", latest report" : ""}${run.published ? "" : ", no report"}`,
       onclick: () => select(run.date),
-    }, shortDate(run.date))));
+    }, shortDate(run.date), isLatest ? h("span", { class: "latest-mark", "aria-hidden": "true" }, "Latest") : null);
+  }));
 }
 
 async function reportFor(date) {
@@ -159,8 +176,11 @@ async function select(date) {
   }
   const fresh = run.topics.filter((t) => t.status === "new").length;
   const developing = run.topics.filter((t) => t.status === "developing").length;
+  const isLatest = latestReport()?.date === date;
   meta.replaceChildren(
-    h("span", {}, longDate(date)),
+    ...(isLatest
+      ? [h("span", {}, h("span", { class: "tag latest" }, "Latest"), `Published ${longDate(date)}, ${age(date)}`)]
+      : [h("span", {}, longDate(date))]),
     h("span", {}, `${run.topics.length} topics, ${fresh} new and ${developing} developing`),
     h("span", {}, `${fmt.int(score(run, "source_count"))} sources`),
     h("span", {}, `Run time ${fmt.min(run.duration_minutes)}`),
@@ -544,7 +564,7 @@ async function start() {
   if (index.updated) {
     document.getElementById("updated").textContent = `Last updated ${longDate(index.updated.slice(0, 10))}.`;
   }
-  const latest = [...state.runs].reverse().find((r) => r.published) || state.runs[state.runs.length - 1];
+  const latest = latestReport() || state.runs[state.runs.length - 1];
   select(latest.date);
 
   // Redraw on width changes only; a redraw changes the height, which must not loop.
