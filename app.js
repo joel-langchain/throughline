@@ -167,7 +167,41 @@ async function select(date) {
     h("span", {}, `Cost ${fmt.usd(run.cost_usd)}`));
   body.replaceChildren(h("p", { class: "lede" }, "Loading…"));
   const markdown = await reportFor(date);
-  if (state.selected === date) renderMarkdown(body, markdown);
+  if (state.selected !== date) return;
+  body.replaceChildren(...summaryOf(run, markdown));
+}
+
+// A week opens on its summary: the title, the opening paragraphs, and the topic
+// list. The topic sections and the sources open on request.
+function summaryOf(run, markdown) {
+  const at = markdown.search(/^##\s/m);
+  const head = at < 0 ? markdown : markdown.slice(0, at);
+  const rest = at < 0 ? "" : markdown.slice(at);
+
+  const summary = h("div", { class: "summary" });
+  renderMarkdown(summary, head);
+  const parts = [summary];
+  if (run.topics.length) {
+    parts.push(
+      h("h2", {}, "Topics"),
+      h("ul", { class: "topics" }, ...run.topics.map((t) =>
+        h("li", {}, t.name, t.status ? h("span", { class: "tag" }, t.status) : null))));
+  }
+  if (!rest) return parts;
+
+  const full = h("div", { class: "full", id: "full-report", hidden: "" });
+  const toggle = h("button", {
+    type: "button", class: "expand", "aria-expanded": "false", "aria-controls": "full-report",
+    onclick: () => {
+      const open = toggle.getAttribute("aria-expanded") !== "true";
+      if (open && !full.hasChildNodes()) renderMarkdown(full, rest);
+      full.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.textContent = open ? "Hide the full report" : "Read the full report";
+    },
+  }, "Read the full report");
+  parts.push(toggle, full);
+  return parts;
 }
 
 // --- charts ----------------------------------------------------------------------

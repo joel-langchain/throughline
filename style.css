@@ -109,6 +109,19 @@ h2 { font-size: 18px; margin: 0 0 4px; font-weight: 600; }
 .report ol li { color: var(--ink-2); margin-bottom: 4px; }
 .held-note { color: var(--ink-2); white-space: pre-line; }
 
+/* summary first, full report on request */
+.report ul.topics { list-style: none; padding: 0; margin: 4px 0 16px; }
+.report ul.topics li { padding: 6px 0; border-bottom: 1px solid var(--grid); }
+.report ul.topics li:last-child { border-bottom: 0; }
+.expand {
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--ring); background: var(--page); color: var(--ink);
+  border-radius: 8px; padding: 8px 14px;
+}
+.expand:hover { background: var(--wash); }
+.expand:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.report .full { margin-top: 8px; }
+
 /* charts */
 /* auto-fill, not auto-fit: a card's width must not depend on how many cards
    exist yet, because each chart measures its card when it draws. */
