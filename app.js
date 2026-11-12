@@ -832,7 +832,7 @@ function renderHeroMap(run, markdown) {
   const root = document.getElementById("hero-viz");
   const { topics, sources } = parseReport(markdown);
   if (!root || !topics.length) return;
-  const W = 400, H = 340, cx = 200, cy = 170, R = 104;
+  const W = 400, H = 302, cx = 200, cy = 154, R = 94;
 
   const tp = topics.map((t, i) => {
     const a = -Math.PI / 2 + (i * 2 * Math.PI) / topics.length;
@@ -859,7 +859,7 @@ function renderHeroMap(run, markdown) {
     const spread = Math.min(Math.PI * 0.85, 0.34 * Math.max(list.length - 1, 1));
     list.forEach((n, k) => {
       const a = t.a + (list.length === 1 ? 0 : -spread / 2 + (spread * k) / (list.length - 1));
-      const d = 40 + (k % 2) * 13;
+      const d = 36 + (k % 2) * 11;
       sp.set(n, { x: t.x + d * Math.cos(a), y: t.y + d * Math.sin(a), topics: [t.i] });
     });
   });
@@ -868,7 +868,7 @@ function renderHeroMap(run, markdown) {
     const a = Math.atan2(
       list.reduce((acc, i) => acc + Math.sin(tp[i].a), 0),
       list.reduce((acc, i) => acc + Math.cos(tp[i].a), 0)) + ((k % 3) - 1) * 0.14;
-    const d = 54 + (k % 2) * 10;
+    const d = 50 + (k % 2) * 9;
     sp.set(n, { x: cx + d * Math.cos(a), y: cy + d * Math.sin(a), topics: list, shared: true });
   });
 
@@ -943,7 +943,7 @@ function renderHeroMap(run, markdown) {
     });
   });
 
-  const hint = "Hover a topic to see the sources behind it. Click to read it.";
+  const hint = "Hover a topic to see its sources. Click to read it.";
   const caption = h("p", { class: "hm-caption", "aria-live": "polite" }, hint);
   function light(topicIdx, sourceNs) {
     svg.classList.add("focusing");
@@ -960,13 +960,13 @@ function renderHeroMap(run, markdown) {
   function showTopic(t) {
     light([t.i], t.cites);
     caption.replaceChildren(h("strong", {}, `${t.i + 1}. ${t.title}`),
-      h("span", {}, `${t.cites.length} sources${t.status ? `, ${t.status}` : ""}`));
+      h("span", {}, `${t.cites.length} sources`));
   }
   function showSource(n, p) {
     light(p.topics, [n]);
     const which = p.topics.map((i) => i + 1);
     caption.replaceChildren(h("strong", {}, sources.get(n) || `Source ${n}`),
-      h("span", {}, `Cited in topic${which.length > 1 ? "s" : ""} ${which.join(" and ")}`));
+      h("span", {}, `topic${which.length > 1 ? "s" : ""} ${which.join(" and ")}`));
   }
   function reset() {
     svg.classList.remove("focusing");
