@@ -5,33 +5,56 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Throughline</title>
   <meta name="description" content="An AI agent that reads the week's AI news every Monday and writes one cited report. Each run publishes its report and its own scores here.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23F7F9FB'/%3E%3Ctext x='50' y='70' font-family='Inter,system-ui,sans-serif' font-size='58' font-weight='bold' fill='%230B1F3A' text-anchor='middle'%3ET%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
-<main>
-  <header>
+<a class="skip-link" href="#content">Skip to content</a>
+
+<nav class="top" aria-label="Site">
+  <div class="wrap">
+    <a class="brand" href="https://joelstrickland.dev/">Joel Strickland</a>
+    <div class="nav-links">
+      <a class="hide-sm" href="#reports">Reports</a>
+      <a class="hide-sm" href="#analytics">Analytics</a>
+      <a class="btn-nav" href="https://github.com/joel-langchain/throughline">Code</a>
+    </div>
+  </div>
+</nav>
+
+<main id="content" class="wrap">
+  <header class="hero">
+    <span class="section-label">Open-source project</span>
     <h1>Throughline</h1>
     <p>An AI agent that reads the week's AI news every Monday and writes one report, with every claim cited. After each run it publishes the report and its own scores here.</p>
-    <p class="links"><a href="https://github.com/joel-langchain/throughline">Code on GitHub</a></p>
+    <div class="hero-buttons">
+      <a class="btn btn-primary" href="#reports">Read this week's report</a>
+      <a class="btn btn-outline" href="https://github.com/joel-langchain/throughline">Code on GitHub</a>
+    </div>
   </header>
 
   <div class="tiles" id="tiles" aria-label="Summary"></div>
 
-  <section aria-labelledby="reports-h">
-    <h2 id="reports-h">Reports</h2>
+  <section id="reports" aria-labelledby="reports-h">
+    <span class="section-label">Reports</span>
+    <h2 id="reports-h">The weekly report</h2>
     <p class="lede">Pick a week. Weeks in grey had no report. The run recorded why and nothing was published.</p>
     <div class="weeks" id="weeks" role="group" aria-label="Weeks"></div>
-    <div class="card">
+    <div class="card report-card">
       <div class="week-meta" id="week-meta"></div>
       <article class="report" id="report"></article>
     </div>
   </section>
 
-  <section aria-labelledby="time-h">
-    <h2 id="time-h">Over time</h2>
+  <section id="analytics" aria-labelledby="time-h">
+    <span class="section-label">Analytics</span>
+    <h2 id="time-h">How each run went</h2>
     <p class="lede">Every run scores itself when it finishes. These charts are those scores, one point per run.</p>
     <div class="charts" id="charts"></div>
     <details>
@@ -39,10 +62,13 @@
       <div class="table-wrap"><table id="table"></table></div>
     </details>
   </section>
-
-  <footer>
-    <p>Next on the <a href="https://github.com/joel-langchain/throughline#roadmap">roadmap</a> is weekly predictions, scored by the following week's run. <span id="updated"></span></p>
-  </footer>
 </main>
+
+<footer>
+  <div class="wrap">
+    <p>Next on the <a href="https://github.com/joel-langchain/throughline#roadmap">roadmap</a> is weekly predictions, scored by the following week's run. <span id="updated"></span></p>
+    <p class="footer-links"><a href="https://joelstrickland.dev/">Joel Strickland</a><span aria-hidden="true">·</span><a href="https://github.com/joel-langchain/throughline">Code on GitHub</a></p>
+  </div>
+</footer>
 </body>
 </html>
