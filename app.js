@@ -228,6 +228,87 @@ function factsOf(run) {
   return h("dl", { class: "facts" }, ...rows.map(([k, v]) => h("div", {}, h("dt", {}, k), h("dd", {}, v))));
 }
 
+function flash(el) {
+  if (!el) return;
+  el.classList.remove("flash");
+  void el.getBoundingClientRect();
+  el.classList.add("flash");
+}
+
+// Wrap each topic of the rendered report in its own block, led by its number and
+// its new/developing tag (taken out of the heading text), and the sources in another.
+function sectionize(full, run) {
+  const blocks = [];
+  let current = null;
+  for (const node of [...full.childNodes]) {
+    if (node.nodeName === "H2") {
+      const text = node.textContent.trim();
+      const isSources = /^sources\b/i.test(text);
+      current = h("section", { class: isSources ? "sources-block" : "topic-block" });
+      full.insertBefore(current, node);
+      if (!isSources) {
+        const n = blocks.length;
+        const m = text.match(/^(.*?)\s*\((new|developing)\)\s*$/i);
+        const status = (m && m[2].toLowerCase()) || (run.topics[n] && run.topics[n].status) || null;
+        node.textContent = m ? m[1] : text;
+        current.append(h("p", { class: "topic-eyebrow" },
+          h("span", { class: "num" }, String(n + 1)),
+          status ? h("span", { class: `tag ${status}` }, status) : null));
+        blocks.push(current);
+      }
+      current.append(node);
+    } else if (current) {
+      current.append(node);
+    }
+  }
+  // Number the sources so a citation can point at one.
+  const list = full.querySelector(".sources-block ol");
+  if (list) {
+    const first = Number(list.getAttribute("start") || 1);
+    [...list.children].forEach((li, i) => { li.id = `src-${first + i}`; });
+  }
+  return blocks;
+}
+
+// Turn "[18]" in the text into a small link to source 18.
+function linkCitations(full) {
+  const walker = document.createTreeWalker(full, NodeFilter.SHOW_TEXT);
+  const hits = [];
+  while (walker.nextNode()) {
+    const t = walker.currentNode;
+    if (/\[\d+\]/.test(t.nodeValue) && !t.parentElement.closest("a, .sources-block")) hits.push(t);
+  }
+  for (const t of hits) {
+    const text = t.nodeValue;
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    for (const m of text.matchAll(/\s?\[(\d+)\]/g)) {
+      frag.append(text.slice(last, m.index));
+      const id = `src-${m[1]}`;
+      frag.append(h("a", {
+        class: "cite", href: `#${id}`, "aria-label": `Source ${m[1]}`,
+        onclick: () => setTimeout(() => flash(document.getElementById(id)), MOTION ? 350 : 0),
+      }, m[1]));
+      last = m.index + m[0].length;
+    }
+    frag.append(text.slice(last));
+    t.replaceWith(frag);
+  }
+}
+
+// Highlight the sidebar topic whose section is being read.
+function spy(blocks, links) {
+  if (!("IntersectionObserver" in window) || !blocks.length) return;
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      const n = blocks.indexOf(e.target);
+      links.forEach((l, i) => l.classList.toggle("current", i === n));
+    }
+  }, { rootMargin: "-35% 0px -60% 0px" });
+  blocks.forEach((b) => io.observe(b));
+}
+
 // A week reads as an article: the opening paragraphs, then the full report on
 // request, with the topics and the week's numbers in a sidebar that stays in view.
 function articleOf(run, markdown) {
@@ -243,36 +324,45 @@ function articleOf(run, markdown) {
     type: "button", class: "expand", "aria-expanded": "false", "aria-controls": "full-report",
     onclick: () => setOpen(toggle.getAttribute("aria-expanded") !== "true"),
   }, "Read the full report");
+  let blocks = [];
   function setOpen(open) {
-    if (open && !full.hasChildNodes()) renderMarkdown(full, rest);
+    if (open && !full.hasChildNodes()) {
+      renderMarkdown(full, rest);
+      blocks = sectionize(full, run);
+      linkCitations(full);
+      spy(blocks, links);
+    }
     full.hidden = !open;
     toggle.setAttribute("aria-expanded", String(open));
     toggle.textContent = open ? "Hide the full report" : "Read the full report";
+    if (!open) links.forEach((l) => l.classList.remove("current"));
   }
   // A topic opens the full report at its own section.
   function jumpTo(n) {
     setOpen(true);
-    const target = full.querySelectorAll("h2")[n];
+    const target = blocks[n];
     if (!target) return;
     target.scrollIntoView({ behavior: MOTION ? "smooth" : "auto", block: "start" });
-    target.classList.remove("flash");
-    void target.getBoundingClientRect();
-    target.classList.add("flash");
+    flash(target.querySelector("h2"));
   }
 
   const aside = h("aside", { class: "r-aside" });
+  const links = [];
   if (run.topics.length) {
     aside.append(
       h("p", { class: "aside-label" }, "In this report"),
       h("ol", { class: "topics" }, ...run.topics.map((t, n) => {
         const inner = [
           h("span", { class: "num", "aria-hidden": "true" }, String(n + 1)),
-          h("span", { class: "topic-name" }, t.name,
+          h("span", { class: "topic-text" },
+            h("span", { class: "topic-name" }, t.name),
             t.status ? h("span", { class: `tag ${t.status}` }, t.status) : null),
         ];
-        return h("li", {}, rest
+        const link = rest
           ? h("button", { type: "button", class: "topic-link", onclick: () => jumpTo(n) }, ...inner)
-          : h("span", { class: "topic-link static" }, ...inner));
+          : h("span", { class: "topic-link static" }, ...inner);
+        links.push(link);
+        return h("li", {}, link);
       })));
   }
   aside.append(h("p", { class: "aside-label" }, "This week's run"), factsOf(run));
