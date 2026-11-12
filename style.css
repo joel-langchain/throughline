@@ -247,7 +247,8 @@ html.motion .hero-text > :nth-child(4) { animation-delay: 180ms; }
 /* hovering a topic or source lights its links and fades the rest */
 .focusing .hm-edge:not(.on), .focusing .hm-src:not(.on) { opacity: 0.12; }
 .focusing .hm-topic:not(.on) { opacity: 0.35; }
-.focusing .hm-particle { opacity: 0.15; }
+/* dim the moving dots as a group, so a dot waiting to start stays hidden */
+.focusing .hm-flow { opacity: 0.15; }
 .hm-edge.on { stroke: var(--accent); stroke-width: 1.6; opacity: 1; }
 .hm-src.on { fill: var(--accent-strong); }
 /* entrance: everything flies out from the report, then the lines draw in */

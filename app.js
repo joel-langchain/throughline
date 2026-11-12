@@ -877,7 +877,7 @@ function renderHeroMap(run, markdown) {
     "aria-label": `This week's report: ${topics.length} topics and the ${sp.size} sources they cite`,
   });
   const gEdges = s("g", {}, svg);
-  const gFlow = s("g", {}, svg);
+  const gFlow = s("g", { class: "hm-flow" }, svg);
   const gSrc = s("g", {}, svg);
   const gTop = s("g", {}, svg);
   const from = (x, y) => `--dx:${cx - x}px;--dy:${cy - y}px`;
