@@ -10,6 +10,9 @@ worth paying attention to. It cuts through volume the way a small editorial team
 would — an editor delegates each topic to a researcher, then synthesises the
 results.
 
+Every report, and how each run went, is on the
+[dashboard](https://joel-langchain.github.io/throughline/).
+
 ## Built as four loops
 
 Throughline is built as **four nested loops of agent engineering**, each one
@@ -410,6 +413,9 @@ _Next:_
 
 - [ ] Configurable scan seeds and topic count
 - [ ] More reliable topic selection — consistently surface the week's biggest stories
+- [ ] Drop non-sources at search time. Pass the deny list (search providers' own
+  pages, social posts) to the search as excluded domains, so results go on usable
+  sources. In one recent run only 12% of results came from listed sites
 
 ### Loop 2 · Verification
 
@@ -434,6 +440,10 @@ _Next:_
   reporting, analysis, aggregator, content farm) and keep the rating across
   weeks, so two weak sites cannot corroborate each other; `sources.toml` becomes
   the override list
+- [ ] Cheaper citation checking. The checker is 77% to 85% of each run's model
+  cost, because it reads the archived sources one file per call. Giving it a
+  topic's sources in one message should cut that, measured on one topic before
+  and after
 
 ### Loop 3 · Event
 
@@ -450,13 +460,18 @@ _Done:_
   dropped rather than killing the run
 - [x] Reproducible deploys — dependencies pinned to the minor CI tests, since the
   platform builds from `pyproject.toml` and not the lockfile
+- [x] Public [dashboard](https://joel-langchain.github.io/throughline/). Each run
+  publishes its report, scores, and cost to a read-only page. A week whose alert
+  fired is recorded with the reason and no report
 
 _Next:_
 
 - [ ] Same TL;DR + ranked headlines at the top of `report.md` itself, not just Slack
 - [ ] More output formats (social teaser, email digest)
 - [ ] LinkedIn posting via MCP (draft → review → post)
-- [ ] Cost controls — token budgets and per-run cost tracking
+- [ ] Cost controls. Per-run cost and its split by stage are now tracked; still to
+  come is a token budget per run, with an alert when a run goes over it
+- [ ] Dashboard on a custom domain, so its address stays the same if the repo moves
 
 ### Loop 4 · Improvement
 
@@ -469,12 +484,20 @@ _Done:_
   report quality plus run health
 - [x] Alerting — a run that needs a person posts a Slack alert, and a refused
   search plan or key stops search for the rest of the run
+- [x] Cost by stage. Each run's model cost is split across citation checking,
+  editing, research, and final review from its trace, and charted week by week
 
 _Next:_
 
+- [ ] Reader feedback. Readers rate each report on the dashboard and suggest
+  corrections. Ratings land on that week's trace beside the automatic scores, which
+  shows whether the two agree
+- [ ] Trend alerts. Alert when a score drifts over several weeks (source quality
+  falling, cost rising), not only when a single run fails
 - [ ] Reuse via assistants — others configure their own Throughline (topics,
   sources, models, cadence) against the same deployment
-- [ ] Forecasting — record predictions each week and score them against what happens
+- [ ] Forecasting. Record predictions each week, score them against what happens,
+  and chart how often they came true on the dashboard
 - [ ] Market-movement analysis — where things are heading, not just what happened
 - [ ] Chat with the week — Q&A over the report and its research archives
 
