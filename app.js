@@ -165,37 +165,43 @@ async function select(date) {
   for (const b of document.querySelectorAll("#weeks button")) {
     b.setAttribute("aria-pressed", String(b.dataset.date === date));
   }
-  const meta = document.getElementById("week-meta");
+  const header = document.getElementById("week-meta");
   const body = document.getElementById("report");
+  const isLatest = latestReport()?.date === date;
+  header.replaceChildren(
+    h("div", { class: "week-title" },
+      h("h3", {}, `Week of ${fullDate(date)}`),
+      isLatest ? h("span", { class: "tag latest" }, "Latest") : null,
+      run.published ? null : h("span", { class: "tag held-tag" }, "No report")),
+    h("p", { class: "week-sub" }, run.published
+      ? `Published ${weekday(date)}, ${age(date)}`
+      : `The scheduled run on ${weekday(date)} did not publish a report`));
+
   if (!run.published) {
-    meta.replaceChildren(
-      h("span", {}, longDate(date)),
-      h("span", {}, `Run time ${fmt.min(run.duration_minutes)}`),
-      h("span", {}, `Cost ${fmt.usd(run.cost_usd)}`));
-    // The reason's first line is the alert's headline; it becomes the heading here.
-    const [headline, ...detail] = (run.held_reason || "No report this week.").split("\n");
+    // The reason's first line is the alert's headline; the rest is what went wrong.
+    const [, ...detail] = (run.held_reason || "").split("\n");
     body.replaceChildren(
-      h("h1", {}, headline.startsWith("No report") ? "No report this week" : "Held back for review"),
-      h("p", { class: "held-note" }, detail.join("\n") || "The run did not produce a report."));
+      h("div", { class: "r-lede" },
+        h("p", { class: "held-note" }, detail.join("\n") || "The run did not produce a report.")),
+      h("aside", { class: "r-aside" }, factsOf(run)));
     replay(body, "swap");
     return;
   }
-  const fresh = run.topics.filter((t) => t.status === "new").length;
-  const developing = run.topics.filter((t) => t.status === "developing").length;
-  const isLatest = latestReport()?.date === date;
-  meta.replaceChildren(
-    ...(isLatest
-      ? [h("span", {}, h("span", { class: "tag latest" }, "Latest"), `Published ${longDate(date)}, ${age(date)}`)]
-      : [h("span", {}, longDate(date))]),
-    h("span", {}, `${run.topics.length} topics, ${fresh} new and ${developing} developing`),
-    h("span", {}, `${fmt.int(score(run, "source_count"))} sources`),
-    h("span", {}, `Run time ${fmt.min(run.duration_minutes)}`),
-    h("span", {}, `Cost ${fmt.usd(run.cost_usd)}`));
-  body.replaceChildren(h("p", { class: "lede" }, "Loading…"));
+  body.replaceChildren(h("p", { class: "r-lede loading" }, "Loading…"));
   const markdown = await reportFor(date);
   if (state.selected !== date) return;
-  body.replaceChildren(...summaryOf(run, markdown));
+  body.replaceChildren(...articleOf(run, markdown));
   replay(body, "swap");
+}
+
+function fullDate(iso) {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
+  });
+}
+
+function weekday(iso) {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
 }
 
 // Restart a one-shot CSS animation on an element.
@@ -206,17 +212,33 @@ function replay(el, cls) {
   el.classList.add(cls);
 }
 
-// A week opens on its summary: the title, the opening paragraphs, and the topic
-// list. The topic sections and the sources open on request.
-function summaryOf(run, markdown) {
+// The week's numbers, for the sidebar. Cost and run time arrive a week late.
+function factsOf(run) {
+  const later = (v, f) => (v == null ? h("span", { class: "pending" }, "Added next week") : f(v));
+  const rows = [];
+  if (run.published) {
+    const fresh = run.topics.filter((t) => t.status === "new").length;
+    const developing = run.topics.length - fresh;
+    rows.push(["Topics", h("span", {}, String(run.topics.length),
+      h("span", { class: "fact-sub" }, `${fresh} new, ${developing} developing`))]);
+    rows.push(["Sources cited", fmt.int(score(run, "source_count"))]);
+  }
+  rows.push(["Run time", later(run.duration_minutes, fmt.min)]);
+  rows.push(["Model cost", later(run.cost_usd, fmt.usd)]);
+  return h("dl", { class: "facts" }, ...rows.map(([k, v]) => h("div", {}, h("dt", {}, k), h("dd", {}, v))));
+}
+
+// A week reads as an article: the opening paragraphs, then the full report on
+// request, with the topics and the week's numbers in a sidebar that stays in view.
+function articleOf(run, markdown) {
   const at = markdown.search(/^##\s/m);
-  const head = at < 0 ? markdown : markdown.slice(0, at);
+  // The report's own title line repeats the date the header already shows.
+  const head = (at < 0 ? markdown : markdown.slice(0, at)).replace(/^#\s.*\n+/, "");
   const rest = at < 0 ? "" : markdown.slice(at);
 
-  const summary = h("div", { class: "summary" });
-  renderMarkdown(summary, head);
-  const parts = [summary];
-  const full = h("div", { class: "full", id: "full-report", hidden: "" });
+  const lede = h("div", { class: "r-lede summary" });
+  renderMarkdown(lede, head);
+  const full = h("div", { class: "r-full full", id: "full-report", hidden: "" });
   const toggle = h("button", {
     type: "button", class: "expand", "aria-expanded": "false", "aria-controls": "full-report",
     onclick: () => setOpen(toggle.getAttribute("aria-expanded") !== "true"),
@@ -238,18 +260,25 @@ function summaryOf(run, markdown) {
     target.classList.add("flash");
   }
 
+  const aside = h("aside", { class: "r-aside" });
   if (run.topics.length) {
-    parts.push(
-      h("h2", {}, "Topics"),
-      h("ul", { class: "topics" }, ...run.topics.map((t, n) =>
-        h("li", {}, rest
-          ? h("button", { type: "button", class: "topic-link", onclick: () => jumpTo(n) },
-            h("span", {}, t.name, t.status ? h("span", { class: "tag" }, t.status) : null),
-            h("span", { class: "chev", "aria-hidden": "true" }, "›"))
-          : h("span", {}, t.name, t.status ? h("span", { class: "tag" }, t.status) : null)))));
+    aside.append(
+      h("p", { class: "aside-label" }, "In this report"),
+      h("ol", { class: "topics" }, ...run.topics.map((t, n) => {
+        const inner = [
+          h("span", { class: "num", "aria-hidden": "true" }, String(n + 1)),
+          h("span", { class: "topic-name" }, t.name,
+            t.status ? h("span", { class: `tag ${t.status}` }, t.status) : null),
+        ];
+        return h("li", {}, rest
+          ? h("button", { type: "button", class: "topic-link", onclick: () => jumpTo(n) }, ...inner)
+          : h("span", { class: "topic-link static" }, ...inner));
+      })));
   }
-  if (!rest) return parts;
-  parts.push(toggle, full);
+  aside.append(h("p", { class: "aside-label" }, "This week's run"), factsOf(run));
+
+  const parts = [lede, aside];
+  if (rest) parts.push(h("div", { class: "r-actions" }, toggle), full);
   return parts;
 }
 
@@ -291,7 +320,8 @@ function frame(plot, { yMax, step, yFormat, label }) {
   const n = state.runs.length;
   const band = innerW / n;
   const xc = (i) => M.left + band * i + band / 2;
-  const every = band < 34 ? 2 : 1;
+  // A date label ("14 Sept") needs about 46px; show every nth so none collide.
+  const every = Math.max(1, Math.ceil(46 / band));
   state.runs.forEach((run, i) => {
     if ((n - 1 - i) % every) return;
     const t = s("text", { x: xc(i), y: M.top + PLOT_H + 18, "text-anchor": "middle" }, svg);
@@ -440,6 +470,8 @@ function stackedCost(container) {
     sub: "Model calls, in US dollars. Search is billed separately and not included.",
     legend: [...STAGES.map(([k, label]) => [label, colors[k]]), ["Not broken down", none]],
   });
+  // Full width, set before it draws, since the chart measures its card.
+  card.classList.add("wide");
   container.append(card);
   const totals = state.runs.map((r) => r.cost_usd);
   const ctx = frame(plot, {
@@ -534,6 +566,8 @@ function lineChart(container, { title, sub, series }) {
 function renderCharts() {
   const root = document.getElementById("charts");
   root.replaceChildren();
+  // Cost leads, full width: where the money goes is the most telling chart.
+  stackedCost(root);
   lineChart(root, {
     title: "Source quality",
     sub: "Share of cited sites on the trusted list, and of claims with a primary source or two independent ones",
@@ -549,7 +583,6 @@ function renderCharts() {
     value: (r) => score(r, "source_count"), format: fmt.int, yFormat: fmt.int,
   });
   stackedTopics(root);
-  stackedCost(root);
   columnChart(root, {
     title: "Run time", sub: "Minutes from start to finish",
     value: (r) => r.duration_minutes, format: fmt.min, yFormat: (v) => String(Math.round(v)), withHeld: true,
