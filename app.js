@@ -6,6 +6,11 @@
 
 const NS = "http://www.w3.org/2000/svg";
 const state = { runs: [], byDate: new Map(), reports: new Map(), selected: null };
+// Motion is on unless the viewer's system asks for less. Every animation on the
+// page hangs off the `motion` class, so without it the page is simply static.
+const MOTION = window.matchMedia("(prefers-reduced-motion: no-preference)").matches
+  && "IntersectionObserver" in window;
+if (MOTION) document.documentElement.classList.add("motion");
 
 // --- small helpers --------------------------------------------------------------
 
@@ -172,6 +177,7 @@ async function select(date) {
     body.replaceChildren(
       h("h1", {}, headline.startsWith("No report") ? "No report this week" : "Held back for review"),
       h("p", { class: "held-note" }, detail.join("\n") || "The run did not produce a report."));
+    replay(body, "swap");
     return;
   }
   const fresh = run.topics.filter((t) => t.status === "new").length;
@@ -189,6 +195,15 @@ async function select(date) {
   const markdown = await reportFor(date);
   if (state.selected !== date) return;
   body.replaceChildren(...summaryOf(run, markdown));
+  replay(body, "swap");
+}
+
+// Restart a one-shot CSS animation on an element.
+function replay(el, cls) {
+  if (!MOTION) return;
+  el.classList.remove(cls);
+  void el.getBoundingClientRect();
+  el.classList.add(cls);
 }
 
 // A week opens on its summary: the title, the opening paragraphs, and the topic
@@ -201,25 +216,39 @@ function summaryOf(run, markdown) {
   const summary = h("div", { class: "summary" });
   renderMarkdown(summary, head);
   const parts = [summary];
-  if (run.topics.length) {
-    parts.push(
-      h("h2", {}, "Topics"),
-      h("ul", { class: "topics" }, ...run.topics.map((t) =>
-        h("li", {}, t.name, t.status ? h("span", { class: "tag" }, t.status) : null))));
-  }
-  if (!rest) return parts;
-
   const full = h("div", { class: "full", id: "full-report", hidden: "" });
   const toggle = h("button", {
     type: "button", class: "expand", "aria-expanded": "false", "aria-controls": "full-report",
-    onclick: () => {
-      const open = toggle.getAttribute("aria-expanded") !== "true";
-      if (open && !full.hasChildNodes()) renderMarkdown(full, rest);
-      full.hidden = !open;
-      toggle.setAttribute("aria-expanded", String(open));
-      toggle.textContent = open ? "Hide the full report" : "Read the full report";
-    },
+    onclick: () => setOpen(toggle.getAttribute("aria-expanded") !== "true"),
   }, "Read the full report");
+  function setOpen(open) {
+    if (open && !full.hasChildNodes()) renderMarkdown(full, rest);
+    full.hidden = !open;
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.textContent = open ? "Hide the full report" : "Read the full report";
+  }
+  // A topic opens the full report at its own section.
+  function jumpTo(n) {
+    setOpen(true);
+    const target = full.querySelectorAll("h2")[n];
+    if (!target) return;
+    target.scrollIntoView({ behavior: MOTION ? "smooth" : "auto", block: "start" });
+    target.classList.remove("flash");
+    void target.getBoundingClientRect();
+    target.classList.add("flash");
+  }
+
+  if (run.topics.length) {
+    parts.push(
+      h("h2", {}, "Topics"),
+      h("ul", { class: "topics" }, ...run.topics.map((t, n) =>
+        h("li", {}, rest
+          ? h("button", { type: "button", class: "topic-link", onclick: () => jumpTo(n) },
+            h("span", {}, t.name, t.status ? h("span", { class: "tag" }, t.status) : null),
+            h("span", { class: "chev", "aria-hidden": "true" }, "›"))
+          : h("span", {}, t.name, t.status ? h("span", { class: "tag" }, t.status) : null)))));
+  }
+  if (!rest) return parts;
   parts.push(toggle, full);
   return parts;
 }
@@ -325,6 +354,7 @@ function columnChart(container, { title, sub, value, format, yFormat, withHeld }
     const color = state.runs[i].published ? c1 : none;
     return s("path", {
       class: "mark", d: barPath(ctx.xc(i) - bw / 2, ctx.y(0), bw, ctx.y(0) - ctx.y(v), 4), fill: color,
+      style: `--i:${i}`,
     }, ctx.svg);
   });
   const last = values.length - 1;
@@ -364,7 +394,7 @@ function stackedTopics(container) {
     const base = ctx.y(0);
     const hNew = base - ctx.y(c.fresh);
     const hDev = base - ctx.y(c.dev);
-    const g = s("g", { class: "mark" }, ctx.svg);
+    const g = s("g", { class: "mark", style: `--i:${i}` }, ctx.svg);
     // New sits on the baseline; developing stacks on top with the rounded end and
     // a 2px surface gap between the two.
     if (c.fresh && c.dev) {
@@ -420,7 +450,7 @@ function stackedCost(container) {
   const marks = state.runs.map((run, i) => {
     if (run.cost_usd == null) return null;
     const x = ctx.xc(i) - bw / 2;
-    const g = s("g", { class: "mark" }, ctx.svg);
+    const g = s("g", { class: "mark", style: `--i:${i}` }, ctx.svg);
     const split = stageSplit(run);
     // Older traces kept cost on the run total only, so those weeks are one grey bar.
     const parts = split
@@ -473,12 +503,12 @@ function lineChart(container, { title, sub, series }) {
     // Break the line at weeks with no value, so a lost week reads as a gap.
     let d = "";
     pts.forEach((p, i) => { if (p) d += `${pts[i - 1] ? "L" : "M"}${p[0]},${p[1]} `; });
-    s("path", { d, fill: "none", stroke: sr.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, ctx.svg);
+    s("path", { class: "line", pathLength: "1", d, fill: "none", stroke: sr.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, ctx.svg);
     pts.forEach((p, i) => {
       const lone = p && !pts[i - 1] && !pts[i + 1];
       const lastPoint = p && pts.slice(i + 1).every((q) => !q);
       if (lone || lastPoint) {
-        s("circle", { cx: p[0], cy: p[1], r: 4, fill: sr.color, stroke: css("--surface"), "stroke-width": 2 }, ctx.svg);
+        s("circle", { class: "dot", cx: p[0], cy: p[1], r: 4, fill: sr.color, stroke: css("--surface"), "stroke-width": 2 }, ctx.svg);
       }
       if (lastPoint) {
         // Sit the label on the open side: below when the line falls into the point.
@@ -550,6 +580,99 @@ function renderTable() {
     h("tbody", {}, ...rows.map((row) => h("tr", {}, ...row.map((c) => h("td", {}, c))))));
 }
 
+// --- live status and motion ----------------------------------------------------------
+
+// The weekly run is scheduled for Monday 05:00 UTC.
+function nextRun(now = new Date()) {
+  const t = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 5));
+  t.setUTCDate(t.getUTCDate() + ((8 - t.getUTCDay()) % 7));
+  if (t <= now) t.setUTCDate(t.getUTCDate() + 7);
+  return t;
+}
+
+function until(t) {
+  const mins = Math.max(0, Math.round((t - Date.now()) / 60000));
+  const d = Math.floor(mins / 1440);
+  const hr = Math.floor((mins % 1440) / 60);
+  if (d > 0) return `${d} day${d === 1 ? "" : "s"}, ${hr} hr`;
+  if (hr > 0) return `${hr} hr, ${mins % 60} min`;
+  return `${mins} min`;
+}
+
+function renderStatus() {
+  const el = document.getElementById("status");
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const latest = latestReport();
+  // Monday 05:00 to 08:00 UTC with no report for today yet: the run is going.
+  const running = now.getUTCDay() === 1 && now.getUTCHours() >= 5 && now.getUTCHours() < 8
+    && !state.byDate.has(today);
+  if (running) {
+    el.replaceChildren(h("span", { class: "pulse", "aria-hidden": "true" }),
+      h("span", {}, "This week's run is in progress. The report appears here when it finishes."));
+    return;
+  }
+  const next = nextRun(now);
+  const day = next.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  el.replaceChildren(
+    h("span", { class: "pulse", "aria-hidden": "true" }),
+    h("span", {}, "Next run in ", h("strong", {}, until(next))),
+    h("span", { class: "status-sub" }, `${day}, 05:00 UTC`),
+    latest ? h("span", { class: "status-sub" }, `Last report ${age(latest.date)}`) : null);
+}
+
+// Count a tile's number up from zero, keeping its prefix and suffix ("$", " min").
+function countUp(el) {
+  const final = el.dataset.final || el.textContent;
+  el.dataset.final = final;
+  const m = final.match(/^([^0-9]*)([0-9][0-9,]*(?:\.[0-9]+)?)(.*)$/);
+  if (!m) return;
+  const [, pre, num, post] = m;
+  const target = parseFloat(num.replace(/,/g, ""));
+  const decimals = (num.split(".")[1] || "").length;
+  const start = performance.now();
+  const step = (now) => {
+    const p = Math.min(1, (now - start) / 1100);
+    el.textContent = pre + (target * (1 - (1 - p) ** 3)).toFixed(decimals) + post;
+    if (p < 1) requestAnimationFrame(step);
+    else el.textContent = final;
+  };
+  requestAnimationFrame(step);
+}
+
+// Fade elements up as they scroll into view, then run `onIn` once for each.
+function reveal(nodes, onIn) {
+  if (!MOTION) return;
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      e.target.classList.add("in");
+      if (onIn) onIn(e.target);
+      io.unobserve(e.target);
+    }
+  }, { threshold: 0, rootMargin: "0px 0px -6% 0px" });
+  nodes.forEach((n, i) => {
+    n.classList.add("reveal");
+    n.style.setProperty("--d", `${Math.min(i, 6) * 60}ms`);
+    io.observe(n);
+  });
+}
+
+// Bars grow and lines draw the first time the charts come into view. Charts redraw
+// on resize, so the animation is switched off once it has played.
+function animateCharts() {
+  if (!MOTION) return;
+  const charts = document.getElementById("charts");
+  charts.classList.add("pre");
+  const io = new IntersectionObserver(([e]) => {
+    if (!e.isIntersecting) return;
+    io.disconnect();
+    charts.classList.replace("pre", "animate");
+    setTimeout(() => charts.classList.add("settled"), 2200);
+  }, { threshold: 0.12 });
+  io.observe(charts);
+}
+
 // --- start -------------------------------------------------------------------------
 
 async function start() {
@@ -566,6 +689,12 @@ async function start() {
   }
   const latest = latestReport() || state.runs[state.runs.length - 1];
   select(latest.date);
+  renderStatus();
+  setInterval(renderStatus, 60000);
+  reveal([...document.querySelectorAll("#reports > .section-label, #reports > h2, #reports > .lede, #reports > .weeks, #reports > .card")]);
+  reveal([...document.querySelectorAll("#analytics > .section-label, #analytics > h2, #analytics > .lede")]);
+  reveal([...document.querySelectorAll(".tile")], (tile) => countUp(tile.querySelector(".value")));
+  animateCharts();
 
   // Redraw on width changes only; a redraw changes the height, which must not loop.
   let pending;

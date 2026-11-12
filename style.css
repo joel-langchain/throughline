@@ -92,10 +92,11 @@
 /* --- base ----------------------------------------------------------------------- */
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; scroll-padding-top: 76px; background: var(--page); }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; background: var(--page); overflow-x: clip; }
+body { overflow-x: clip; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  *, *::before, *::after { transition: none !important; }
+  *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 body {
   margin: 0;
@@ -164,7 +165,75 @@ nav.top .brand:hover { text-decoration: none; }
 
 /* --- hero ------------------------------------------------------------------------- */
 
-.hero { padding: 56px 0 8px; }
+.hero { padding: 56px 0 8px; position: relative; isolation: isolate; }
+/* the soft teal glow behind the hero, as on joelstrickland.dev */
+.hero::before {
+  content: ""; position: absolute; z-index: -1; pointer-events: none;
+  top: -140px; left: -180px; width: 760px; height: 560px;
+  background: radial-gradient(closest-side, rgba(47, 164, 169, 0.16), rgba(11, 31, 58, 0.06), transparent 72%);
+  filter: blur(40px);
+}
+html.motion .hero::before { animation: glow 8s ease-in-out infinite; }
+@keyframes glow {
+  0%, 100% { opacity: 0.75; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+.gradient-text {
+  background: linear-gradient(90deg, var(--ink) 0%, var(--ink) 35%, var(--accent) 65%, var(--ink) 100%);
+  background-size: 220% auto;
+  background-position: 0% 50%;
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent; -webkit-text-fill-color: transparent;
+}
+html.motion .gradient-text { animation: shift 9s ease-in-out infinite; }
+@keyframes shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+/* the hero settles in on load */
+html.motion .hero > * { animation: rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+html.motion .hero > :nth-child(2) { animation-delay: 60ms; }
+html.motion .hero > :nth-child(3) { animation-delay: 120ms; }
+html.motion .hero > :nth-child(4) { animation-delay: 180ms; }
+html.motion .hero > :nth-child(5) { animation-delay: 240ms; }
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* live status: when the next run is */
+.status {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+  margin: 20px 0 0; padding: 7px 14px 7px 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+  box-shadow: var(--shadow);
+  font-size: 13px; color: var(--ink-2);
+}
+.hero .status { max-width: none; font-size: 13px; color: var(--ink-2); }
+.status:empty { display: none; }
+.status strong { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.status .status-sub { color: var(--muted); }
+.status .status-sub::before { content: "·"; margin-right: 10px; color: var(--axis); }
+.pulse { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+html.motion .pulse::after {
+  content: ""; position: absolute; inset: -4px; border-radius: 50%;
+  border: 2px solid var(--accent); animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes ping {
+  0% { transform: scale(0.5); opacity: 0.9; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+@media (max-width: 520px) { .status { border-radius: var(--radius-sm); } }
+
+/* scroll reveal, and the fade when switching weeks */
+/* `translate`, not `transform`, so a card's hover lift still works after it has revealed */
+html.motion .reveal:not(.in) { opacity: 0; }
+html.motion .reveal.in { animation: reveal 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) var(--d, 0ms) both; }
+@keyframes reveal {
+  from { opacity: 0; translate: 0 16px; }
+  to { opacity: 1; translate: 0 0; }
+}
+html.motion .report.swap { animation: rise 0.35s ease-out both; }
 .section-label {
   display: inline-block;
   font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
@@ -207,6 +276,13 @@ section h2 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; margin: 0 0
 .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
 @media (min-width: 720px) { .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .tile { padding: 16px 18px; }
+/* cards lift with a teal glow, as on joelstrickland.dev */
+.tile, .chart { transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease, border-color 0.25s ease; }
+.tile:hover { transform: translateY(-3px); }
+.tile:hover, .chart:hover {
+  border-color: rgba(47, 164, 169, 0.35);
+  box-shadow: 0 10px 34px rgba(11, 31, 58, 0.10), 0 0 22px rgba(47, 164, 169, 0.16);
+}
 .tile .label { font-size: 13px; font-weight: 500; color: var(--ink-2); }
 .tile .value { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; margin-top: 6px; font-variant-numeric: tabular-nums; }
 .tile .note { font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -219,7 +295,8 @@ section h2 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; margin: 0 0
   border-radius: 999px; padding: 5px 13px;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
-.weeks button:hover { background: var(--surface-2); }
+.weeks button { transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease; }
+.weeks button:hover { background: var(--surface-2); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(11, 31, 58, 0.08); }
 .weeks button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 .weeks button .latest-mark {
   font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
@@ -258,8 +335,25 @@ section h2 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; margin: 0 0
 
 /* summary first, full report on request */
 .report ul.topics { list-style: none; padding: 0; margin: 4px 0 20px; }
-.report ul.topics li { color: var(--ink); padding: 10px 0; border-bottom: 1px solid var(--grid); }
+.report ul.topics li { color: var(--ink); border-bottom: 1px solid var(--grid); }
+.report ul.topics li > span { display: block; padding: 10px 0; }
 .report ul.topics li:last-child { border-bottom: 0; }
+.topic-link {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  font: inherit; color: var(--ink); text-align: left; cursor: pointer;
+  background: none; border: 0; padding: 10px 8px; margin: 0 -8px; width: calc(100% + 16px);
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.topic-link:hover { background: var(--wash); color: var(--link); }
+.topic-link .chev { margin-left: auto; color: var(--muted); font-size: 20px; line-height: 1; transition: transform 0.2s ease, color 0.15s ease; }
+.topic-link:hover .chev { transform: translateX(3px); color: var(--link); }
+.report .full h2 { scroll-margin-top: 80px; border-radius: 8px; margin-left: -8px; margin-right: -8px; padding: 2px 8px; }
+html.motion .report .full h2.flash { animation: flash 1.8s ease-out; }
+@keyframes flash {
+  0%, 30% { background: rgba(47, 164, 169, 0.22); }
+  100% { background: transparent; }
+}
 .expand {
   font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
   border: 1px solid transparent; background: var(--accent-strong); color: var(--on-accent);
@@ -285,6 +379,22 @@ section h2 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; margin: 0 0
 .plot svg { display: block; width: 100%; overflow: visible; }
 .plot svg text { font: 11px "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--muted); }
 .plot svg text.direct { fill: var(--ink-2); font-weight: 600; }
+/* bars grow and lines draw the first time the charts come into view */
+html.motion .charts.pre .plot svg .mark,
+html.motion .charts.pre .plot svg .line,
+html.motion .charts.pre .plot svg .dot,
+html.motion .charts.pre .plot svg text.direct { opacity: 0; }
+html.motion .charts.animate:not(.settled) .mark {
+  transform-box: fill-box; transform-origin: 50% 100%;
+  animation: grow 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+html.motion .charts.animate:not(.settled) .line { stroke-dasharray: 1; animation: draw 1.3s ease-out both; }
+html.motion .charts.animate:not(.settled) .dot,
+html.motion .charts.animate:not(.settled) text.direct { animation: fade 0.4s ease-out 0.9s both; }
+@keyframes grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 .plot .hit:focus { outline: none; }
 .plot .hit:focus-visible + .mark, .plot .mark.active { filter: brightness(1.12); }
 .tip {
