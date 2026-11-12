@@ -334,13 +334,16 @@ section h2 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; margin: 0 0
 
 .report {
   display: grid; grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "lede" "aside" "actions" "full";
+  grid-template-areas: "lede" "facts" "aside" "actions" "full";
   padding: 20px 22px 24px; overflow-wrap: anywhere;
 }
 .r-lede { grid-area: lede; max-width: 68ch; }
-.r-aside { grid-area: aside; align-self: start; margin: 18px 0 6px; padding-top: 18px; border-top: 1px solid var(--grid); }
-.r-actions { grid-area: actions; margin-top: 14px; }
+/* the run's numbers, as a strip under the opening paragraphs */
+.r-facts { grid-area: facts; max-width: 68ch; margin-top: 22px; padding: 16px 0; border-top: 1px solid var(--grid); border-bottom: 1px solid var(--grid); }
+.r-aside { grid-area: aside; align-self: start; margin: 22px 0 4px; }
+.r-actions { grid-area: actions; margin-top: 22px; }
 .r-full { grid-area: full; max-width: 68ch; margin-top: 8px; }
+@media (min-width: 560px) { .r-facts .facts { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (min-width: 768px) {
   .week-head { padding: 26px 32px 20px; }
   .report { padding: 26px 32px 32px; }
@@ -348,14 +351,16 @@ section h2 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; margin: 0 0
 @media (min-width: 960px) {
   .report {
     grid-template-columns: minmax(0, 1fr) 280px;
-    grid-template-areas: "lede aside" "actions aside" "full aside";
-    grid-template-rows: auto auto 1fr;
+    grid-template-areas: "lede aside" "facts aside" "actions aside" "full aside";
+    grid-template-rows: auto auto auto 1fr;
     column-gap: 48px;
   }
   .r-aside {
     position: sticky; top: 84px; margin: 0;
-    padding: 0 0 0 28px; border-top: 0; border-left: 1px solid var(--grid);
+    padding: 0 0 0 28px; border-left: 1px solid var(--grid);
   }
+  /* a week with no report has no topics, so no sidebar */
+  .report.single { grid-template-columns: minmax(0, 1fr); grid-template-areas: "lede" "facts"; }
 }
 
 /* the opening paragraphs */
@@ -398,8 +403,6 @@ html.motion .report .r-full .flash { animation: flash 1.8s ease-out; }
 
 /* sidebar: the topics, then the week's numbers */
 .aside-label { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-.r-aside .aside-label + .facts, .r-aside ol + .aside-label { margin-top: 0; }
-.r-aside ol + .aside-label { margin-top: 22px; }
 .report ol.topics { list-style: none; margin: 0; padding: 0; font-size: 14px; color: var(--ink); }
 .report ol.topics li + li { margin-top: 2px; }
 .topic-link {

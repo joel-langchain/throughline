@@ -180,13 +180,15 @@ async function select(date) {
   if (!run.published) {
     // The reason's first line is the alert's headline; the rest is what went wrong.
     const [, ...detail] = (run.held_reason || "").split("\n");
+    body.classList.add("single");
     body.replaceChildren(
       h("div", { class: "r-lede" },
         h("p", { class: "held-note" }, detail.join("\n") || "The run did not produce a report.")),
-      h("aside", { class: "r-aside" }, factsOf(run)));
+      h("div", { class: "r-facts" }, factsOf(run)));
     replay(body, "swap");
     return;
   }
+  body.classList.remove("single");
   body.replaceChildren(h("p", { class: "r-lede loading" }, "Loading…"));
   const markdown = await reportFor(date);
   if (state.selected !== date) return;
@@ -365,9 +367,8 @@ function articleOf(run, markdown) {
         return h("li", {}, link);
       })));
   }
-  aside.append(h("p", { class: "aside-label" }, "This week's run"), factsOf(run));
-
-  const parts = [lede, aside];
+  // The run's numbers sit under the opening paragraphs, so the two columns balance.
+  const parts = [lede, h("div", { class: "r-facts" }, factsOf(run)), aside];
   if (rest) parts.push(h("div", { class: "r-actions" }, toggle), full);
   return parts;
 }
