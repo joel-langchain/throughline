@@ -329,6 +329,14 @@ section { margin-top: 64px; }
 .hero + section { margin-top: 48px; }
 section h2 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; margin: 0 0 6px; }
 .lede { color: var(--ink-2); font-size: 15px; margin: 0 0 20px; max-width: 72ch; }
+.disclaimer {
+  display: flex; align-items: center; gap: 8px; margin: -8px 0 18px;
+  font-size: 13px; color: var(--muted);
+}
+.disclaimer::before {
+  content: "i"; flex: none; display: grid; place-items: center; width: 16px; height: 16px;
+  border-radius: 50%; border: 1px solid var(--axis); font-size: 10px; font-weight: 700; font-style: italic; color: var(--muted);
+}
 
 .card {
   background: var(--surface);

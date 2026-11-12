@@ -1001,7 +1001,7 @@ async function start() {
   if (latest.published) reportFor(latest.date).then((md) => renderHeroMap(latest, md)).catch(() => {});
   renderStatus();
   setInterval(renderStatus, 60000);
-  reveal([...document.querySelectorAll("#reports > .section-label, #reports > h2, #reports > .lede, #reports > .weeks, #reports > .card")]);
+  reveal([...document.querySelectorAll("#reports > .section-label, #reports > h2, #reports > .lede, #reports > .disclaimer, #reports > .weeks, #reports > .card")]);
   reveal([...document.querySelectorAll("#analytics > .section-label, #analytics > h2, #analytics > .lede")]);
   reveal([...document.querySelectorAll(".tile")], (tile) => countUp(tile.querySelector(".value")));
   animateCharts();
