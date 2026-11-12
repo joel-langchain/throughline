@@ -181,6 +181,7 @@ async function select(date) {
     // The reason's first line is the alert's headline; the rest is what went wrong.
     const [, ...detail] = (run.held_reason || "").split("\n");
     body.classList.add("single");
+    state.jumpTo = null;
     body.replaceChildren(
       h("div", { class: "r-lede" },
         h("p", { class: "held-note" }, detail.join("\n") || "The run did not produce a report.")),
@@ -347,6 +348,7 @@ function articleOf(run, markdown) {
     target.scrollIntoView({ behavior: MOTION ? "smooth" : "auto", block: "start" });
     flash(target.querySelector("h2"));
   }
+  state.jumpTo = rest ? jumpTo : null;
 
   const aside = h("aside", { class: "r-aside" });
   const links = [];
@@ -797,6 +799,189 @@ function animateCharts() {
   io.observe(charts);
 }
 
+// --- hero map: this week's report, its topics, and the sources behind each --------
+
+// Topics (with their new/developing tag and the sources they cite) and the source
+// list's outlet names, read from the report's markdown.
+function parseReport(markdown) {
+  const topics = [];
+  const sources = new Map();
+  for (const part of markdown.split(/^##\s+/m).slice(1)) {
+    const nl = part.indexOf("\n");
+    const heading = (nl < 0 ? part : part.slice(0, nl)).trim();
+    const body = nl < 0 ? "" : part.slice(nl + 1);
+    if (/^sources\b/i.test(heading)) {
+      for (const m of body.matchAll(/^\s*(\d+)\.\s+(.+)$/gm)) {
+        sources.set(Number(m[1]), m[2].split(/\s+—\s+/)[0].trim());
+      }
+      continue;
+    }
+    const sm = heading.match(/^(.*?)\s*\((new|developing)\)\s*$/i);
+    const cites = [...new Set([...body.matchAll(/\[(\d+)\]/g)].map((m) => Number(m[1])))];
+    topics.push({ title: sm ? sm[1] : heading, status: sm ? sm[2].toLowerCase() : null, cites });
+  }
+  return { topics, sources };
+}
+
+async function openTopic(date, n) {
+  if (state.selected !== date) await select(date);
+  if (state.jumpTo) state.jumpTo(n);
+}
+
+function renderHeroMap(run, markdown) {
+  const root = document.getElementById("hero-viz");
+  const { topics, sources } = parseReport(markdown);
+  if (!root || !topics.length) return;
+  const W = 400, H = 340, cx = 200, cy = 170, R = 104;
+
+  const tp = topics.map((t, i) => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / topics.length;
+    return { ...t, i, a, x: cx + R * Math.cos(a), y: cy + R * Math.sin(a),
+      r: Math.min(15, 8 + t.cites.length * 0.7) };
+  });
+  // Which topics cite each source. A source only one topic cites fans out beyond
+  // that topic; one several topics cite sits between them, nearer the centre.
+  const citedBy = new Map();
+  tp.forEach((t) => t.cites.forEach((n) => {
+    if (!citedBy.has(n)) citedBy.set(n, []);
+    citedBy.get(n).push(t.i);
+  }));
+  const own = new Map();
+  const shared = [];
+  for (const [n, list] of citedBy) {
+    if (list.length > 1) { shared.push(n); continue; }
+    if (!own.has(list[0])) own.set(list[0], []);
+    own.get(list[0]).push(n);
+  }
+  const sp = new Map();
+  tp.forEach((t) => {
+    const list = own.get(t.i) || [];
+    const spread = Math.min(Math.PI * 0.85, 0.34 * Math.max(list.length - 1, 1));
+    list.forEach((n, k) => {
+      const a = t.a + (list.length === 1 ? 0 : -spread / 2 + (spread * k) / (list.length - 1));
+      const d = 40 + (k % 2) * 13;
+      sp.set(n, { x: t.x + d * Math.cos(a), y: t.y + d * Math.sin(a), topics: [t.i] });
+    });
+  });
+  shared.forEach((n, k) => {
+    const list = citedBy.get(n);
+    const a = Math.atan2(
+      list.reduce((acc, i) => acc + Math.sin(tp[i].a), 0),
+      list.reduce((acc, i) => acc + Math.cos(tp[i].a), 0)) + ((k % 3) - 1) * 0.14;
+    const d = 54 + (k % 2) * 10;
+    sp.set(n, { x: cx + d * Math.cos(a), y: cy + d * Math.sin(a), topics: list, shared: true });
+  });
+
+  const svg = s("svg", {
+    viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": `This week's report: ${topics.length} topics and the ${sp.size} sources they cite`,
+  });
+  const gEdges = s("g", {}, svg);
+  const gFlow = s("g", {}, svg);
+  const gSrc = s("g", {}, svg);
+  const gTop = s("g", {}, svg);
+  const from = (x, y) => `--dx:${cx - x}px;--dy:${cy - y}px`;
+
+  tp.forEach((t) => {
+    t.spoke = s("path", { class: "hm-edge spoke", d: `M${t.x},${t.y} L${cx},${cy}`, pathLength: "1", style: `--k:${t.i}` }, gEdges);
+  });
+  let k = 0;
+  for (const [n, p] of sp) {
+    p.edges = p.topics.map((i) => s("path", {
+      class: "hm-edge", d: `M${p.x},${p.y} L${tp[i].x},${tp[i].y}`, pathLength: "1", style: `--k:${k}`,
+    }, gEdges));
+    p.dot = s("circle", {
+      class: `hm-src${p.shared ? " shared" : ""}`, cx: p.x, cy: p.y, r: p.shared ? 4 : 3.2,
+      style: `${from(p.x, p.y)};--k:${k}`,
+    }, gSrc);
+    p.dot.addEventListener("pointerenter", () => showSource(n, p));
+    p.dot.addEventListener("pointerleave", reset);
+    k += 1;
+  }
+
+  // Evidence moving inward: source to topic, topic to report.
+  if (MOTION) {
+    const particle = (path, dur, begin) => {
+      const c = s("circle", { class: "hm-particle", r: 1.7, opacity: 0 }, gFlow);
+      s("animateMotion", { dur: `${dur}s`, begin: `${begin}s`, repeatCount: "indefinite", path }, c);
+      s("animate", { attributeName: "opacity", values: "0;1;1;0", keyTimes: "0;0.15;0.8;1", dur: `${dur}s`, begin: `${begin}s`, repeatCount: "indefinite" }, c);
+    };
+    let j = 0;
+    for (const p of sp.values()) {
+      for (const i of p.topics) particle(`M${p.x},${p.y} L${tp[i].x},${tp[i].y}`, 2.2 + (j % 5) * 0.35, 1.6 + (j * 0.37) % 3);
+      j += 1;
+    }
+    tp.forEach((t) => particle(`M${t.x},${t.y} L${cx},${cy}`, 1.8, 2 + t.i * 0.45));
+  }
+
+  const center = s("g", { class: "hm-center" }, svg);
+  s("circle", { cx, cy, r: 30 }, center);
+  const t1 = s("text", { x: cx, y: cy - 5, class: "hm-c1" }, center);
+  t1.textContent = shortDate(run.date);
+  const t2 = s("text", { x: cx, y: cy + 10, class: "hm-c2" }, center);
+  t2.textContent = "report";
+
+  tp.forEach((t) => {
+    const g = s("g", {
+      class: `hm-topic ${t.status || ""}`, tabindex: "0", role: "button",
+      "aria-label": `Topic ${t.i + 1}: ${t.title}, ${t.cites.length} sources. Opens the report at this topic.`,
+      style: `${from(t.x, t.y)};--i:${t.i}`,
+    }, gTop);
+    s("circle", { class: "hm-ring", cx: t.x, cy: t.y, r: t.r, style: `--i:${t.i}` }, g);
+    s("circle", { class: "node", cx: t.x, cy: t.y, r: t.r }, g);
+    const label = s("text", { x: t.x, y: t.y }, g);
+    label.textContent = String(t.i + 1);
+    t.g = g;
+    const show = () => showTopic(t);
+    g.addEventListener("pointerenter", show);
+    g.addEventListener("focus", show);
+    g.addEventListener("pointerleave", reset);
+    g.addEventListener("blur", reset);
+    g.addEventListener("click", () => openTopic(run.date, t.i));
+    g.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openTopic(run.date, t.i); }
+    });
+  });
+
+  const hint = "Hover a topic to see the sources behind it. Click to read it.";
+  const caption = h("p", { class: "hm-caption", "aria-live": "polite" }, hint);
+  function light(topicIdx, sourceNs) {
+    svg.classList.add("focusing");
+    tp.forEach((t) => {
+      t.g.classList.toggle("on", topicIdx.includes(t.i));
+      t.spoke.classList.toggle("on", topicIdx.includes(t.i));
+    });
+    for (const [n, p] of sp) {
+      const on = sourceNs.includes(n);
+      p.dot.classList.toggle("on", on);
+      p.edges.forEach((e, x) => e.classList.toggle("on", on && topicIdx.includes(p.topics[x])));
+    }
+  }
+  function showTopic(t) {
+    light([t.i], t.cites);
+    caption.replaceChildren(h("strong", {}, `${t.i + 1}. ${t.title}`),
+      h("span", {}, `${t.cites.length} sources${t.status ? `, ${t.status}` : ""}`));
+  }
+  function showSource(n, p) {
+    light(p.topics, [n]);
+    const which = p.topics.map((i) => i + 1);
+    caption.replaceChildren(h("strong", {}, sources.get(n) || `Source ${n}`),
+      h("span", {}, `Cited in topic${which.length > 1 ? "s" : ""} ${which.join(" and ")}`));
+  }
+  function reset() {
+    svg.classList.remove("focusing");
+    svg.querySelectorAll(".on").forEach((el) => el.classList.remove("on"));
+    caption.replaceChildren(hint);
+  }
+
+  root.replaceChildren(
+    h("p", { class: "hm-head" },
+      h("span", { class: "section-label" }, "This week, mapped"),
+      h("span", { class: "hm-stats" }, [`${topics.length} topics`, `${sp.size} sources`,
+        shared.length ? `${shared.length} back more than one topic` : null].filter(Boolean).join(" · "))),
+    svg, caption);
+}
+
 // --- start -------------------------------------------------------------------------
 
 async function start() {
@@ -813,6 +998,7 @@ async function start() {
   }
   const latest = latestReport() || state.runs[state.runs.length - 1];
   select(latest.date);
+  if (latest.published) reportFor(latest.date).then((md) => renderHeroMap(latest, md)).catch(() => {});
   renderStatus();
   setInterval(renderStatus, 60000);
   reveal([...document.querySelectorAll("#reports > .section-label, #reports > h2, #reports > .lede, #reports > .weeks, #reports > .card")]);

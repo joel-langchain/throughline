@@ -171,7 +171,8 @@ nav.top .brand:hover { text-decoration: none; }
 
 /* --- hero ------------------------------------------------------------------------- */
 
-.hero { padding: 56px 0 8px; position: relative; isolation: isolate; }
+.hero { padding: 56px 0 8px; position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; }
+@media (min-width: 960px) { .hero { grid-template-columns: minmax(0, 1fr) 400px; column-gap: 40px; padding-top: 40px; } }
 /* the soft teal glow behind the hero, as on joelstrickland.dev */
 .hero::before {
   content: ""; position: absolute; z-index: -1; pointer-events: none;
@@ -197,11 +198,64 @@ html.motion .gradient-text { animation: shift 9s ease-in-out infinite; }
   50% { background-position: 100% 50%; }
 }
 /* the hero settles in on load */
-html.motion .hero > * { animation: rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-html.motion .hero > :nth-child(2) { animation-delay: 60ms; }
-html.motion .hero > :nth-child(3) { animation-delay: 120ms; }
-html.motion .hero > :nth-child(4) { animation-delay: 180ms; }
-html.motion .hero > :nth-child(5) { animation-delay: 240ms; }
+html.motion .hero-text > * { animation: rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+html.motion .hero-text > :nth-child(2) { animation-delay: 60ms; }
+html.motion .hero-text > :nth-child(3) { animation-delay: 120ms; }
+html.motion .hero-text > :nth-child(4) { animation-delay: 180ms; }
+
+/* the map of this week's report, beside the hero text on wide screens */
+.hero-viz { display: none; position: relative; }
+@media (min-width: 960px) { .hero-viz { display: block; } }
+.hero-viz::before {
+  content: ""; position: absolute; z-index: -1; pointer-events: none;
+  inset: 8% 4%; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(47, 164, 169, 0.16), transparent 75%);
+  filter: blur(20px);
+}
+.hero .hm-head { display: flex; flex-direction: column; align-items: center; gap: 0; margin: 0 0 2px; text-align: center; }
+.hero .hm-head .section-label { margin-bottom: 2px; }
+.hm-stats { font-size: 13px; color: var(--muted); }
+.hero-viz svg { display: block; width: 100%; height: auto; overflow: visible; }
+.hero .hm-caption {
+  min-height: 60px; margin: 0 auto; max-width: 36ch; text-align: center;
+  font-size: 13px; line-height: 1.45; color: var(--muted);
+}
+.hm-caption strong { display: block; color: var(--ink); font-weight: 600; }
+.hm-edge { fill: none; stroke: var(--axis); stroke-width: 1; opacity: 0.8; transition: opacity 0.2s ease, stroke 0.2s ease; }
+.hm-edge.spoke { stroke-width: 1.5; }
+.hm-src { fill: var(--muted); stroke: transparent; stroke-width: 10; transition: opacity 0.2s ease, fill 0.2s ease; }
+.hm-src.shared { fill: var(--ink-2); }
+.hm-particle { fill: var(--accent); }
+.hm-center circle { fill: var(--primary); }
+.hm-center text { text-anchor: middle; font-family: "Inter", system-ui, sans-serif; fill: var(--on-primary); }
+.hm-c1 { font-size: 12px; font-weight: 700; }
+.hm-c2 { font-size: 9px; font-weight: 500; letter-spacing: 0.04em; opacity: 0.75; }
+.hm-topic { cursor: pointer; transition: opacity 0.2s ease; }
+.hm-topic .node { stroke: var(--surface); stroke-width: 3; fill: var(--series-1); }
+.hm-topic.developing .node { fill: var(--series-2); }
+.hm-topic text { fill: #0B1F3A; font: 700 11px "Inter", system-ui, sans-serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.hm-topic:focus { outline: none; }
+.hm-topic:focus-visible .node { stroke: var(--accent); }
+.hm-ring { fill: none; stroke-width: 2; stroke: var(--series-1); opacity: 0; }
+.hm-topic.developing .hm-ring { stroke: var(--series-2); }
+/* hovering a topic or source lights its links and fades the rest */
+.focusing .hm-edge:not(.on), .focusing .hm-src:not(.on) { opacity: 0.12; }
+.focusing .hm-topic:not(.on) { opacity: 0.35; }
+.focusing .hm-particle { opacity: 0.15; }
+.hm-edge.on { stroke: var(--accent); stroke-width: 1.6; opacity: 1; }
+.hm-src.on { fill: var(--accent-strong); }
+/* entrance: everything flies out from the report, then the lines draw in */
+html.motion .hm-center { transform-box: fill-box; transform-origin: center; animation: pop 0.6s cubic-bezier(0.2, 0.8, 0.2, 1.3) backwards; }
+html.motion .hm-topic { transform-box: fill-box; transform-origin: center; animation: fly 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; animation-delay: calc(0.25s + var(--i) * 90ms); }
+html.motion .hm-src { transform-box: fill-box; transform-origin: center; animation: fly 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; animation-delay: calc(0.7s + var(--k) * 16ms); }
+html.motion .hm-edge { stroke-dasharray: 1; animation: draw 0.9s ease-out backwards; animation-delay: calc(0.9s + var(--k, 0) * 14ms); }
+html.motion .hm-ring { transform-box: fill-box; transform-origin: center; animation: ring 3.4s ease-out infinite; animation-delay: calc(2s + var(--i) * 0.7s); }
+@keyframes pop { from { transform: scale(0); } }
+@keyframes fly { from { transform: translate(var(--dx), var(--dy)) scale(0.3); opacity: 0; } }
+@keyframes ring {
+  0% { transform: scale(1); opacity: 0.55; }
+  70%, 100% { transform: scale(2.3); opacity: 0; }
+}
 @keyframes rise {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
