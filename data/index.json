@@ -1,6 +1,57 @@
 {
-  "updated": "2026-11-11T09:57:11+00:00",
+  "updated": "2026-11-16T05:30:33+00:00",
   "runs": [
+    {
+      "date": "2026-11-16",
+      "title": "Throughline — This Week in AI · 2026-11-16",
+      "published": true,
+      "held_reason": null,
+      "topics": [
+        {
+          "name": "Anthropic Ships Frontier Models — and an IPO",
+          "status": "developing"
+        },
+        {
+          "name": "Google's Gemini 4 Opens Up, Hydrogen Arrives",
+          "status": "developing"
+        },
+        {
+          "name": "Enterprise Agents: The Economics Don't Add Up Yet",
+          "status": "developing"
+        },
+        {
+          "name": "AI Is Corrupting Scientific Publishing",
+          "status": "new"
+        },
+        {
+          "name": "New Congress, New AI Regulation Window",
+          "status": "developing"
+        }
+      ],
+      "scores": {
+        "report_produced": 1.0,
+        "topic_count": 5.0,
+        "source_count": 33.0,
+        "search_available": 1.0,
+        "source_archive_ok": 1.0,
+        "search_failures": 0.0,
+        "subagent_failures": 0.0,
+        "topics_kept": 7.0,
+        "verification_flags": 3.0,
+        "final_pass_revisions": 0.0,
+        "claims_corroborated": 0.893,
+        "delivery_ok": 1.0,
+        "source_quality": 0.185,
+        "groundedness": 0.905,
+        "citation_integrity": 1.0,
+        "voice": 1.0,
+        "dedup": 1.0
+      },
+      "trace_id": "01a1e2ba-03c1-7191-b73c-6574eafdf3ce",
+      "cost_usd": null,
+      "cost_by_stage": null,
+      "duration_minutes": null
+    },
     {
       "date": "2026-11-09",
       "title": "Throughline — This Week in AI · 2026-11-09",
