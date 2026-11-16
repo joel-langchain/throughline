@@ -28,6 +28,9 @@ _cfg = _load()
 
 # Press-release / wire domains: dropped before any researcher sees them.
 PRESS_RELEASE_DOMAINS = frozenset(_cfg.get("deny", []))
+# Path segments that mark a press release or paid post on an otherwise real
+# outlet's domain. Scored after the run (see scoring.score_press_release_path).
+PRESS_RELEASE_PATHS = frozenset(p.strip("/").lower() for p in _cfg.get("deny_paths", []))
 # Reputable domains: tagged so the model gets a deterministic quality signal.
 REPUTABLE_DOMAINS = frozenset(_cfg.get("allow", []))
 # Broad discovery seeds for scan_ai_week.

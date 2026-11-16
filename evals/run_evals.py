@@ -44,6 +44,8 @@ def main() -> None:
 
     chosen = [
         evaluators.source_quality,
+        evaluators.press_release_path,
+        evaluators.source_recency,
         evaluators.groundedness,
         evaluators.citation_integrity,
         evaluators.dedup,

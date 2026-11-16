@@ -186,9 +186,10 @@ into the channel. The report also lands in the run's LangSmith trace. See
 Using what happens in real runs to make the system better over time.
 
 - **Evals** — a frozen-week golden dataset with planted defects, scored by
-  **reference-free evaluators** (citation integrity, source quality, groundedness,
-  dedup, editorial voice). Because they read only the report, the same evaluators
-  grade the golden set offline *and* live traces online.
+  **reference-free evaluators** (citation integrity, source quality, press
+  releases cited by URL path, source recency, groundedness, dedup, editorial
+  voice). Because they read only the report, the same evaluators grade the golden
+  set offline *and* live traces online.
 - **CI gate** — a GitHub Actions workflow runs the golden set through those
   evaluators on every push and PR, offline (no LangSmith, no secrets). It fails the
   build if an evaluator stops catching its planted defect or starts firing on the
@@ -486,6 +487,11 @@ _Done:_
   search plan or key stops search for the rest of the run
 - [x] Cost by stage. Each run's model cost is split across citation checking,
   editing, research, and final review from its trace, and charted week by week
+- [x] Recency and press-release checks. Each run scores the share of sources
+  dated inside the week it covers, and whether any cited URL is a press release
+  by its path (a release hosted on a newspaper's site, which the domain list
+  cannot see). Groundedness also checks attributed quotes, and no longer splits
+  sentences after "vs." or "H.R."
 
 _Next:_
 

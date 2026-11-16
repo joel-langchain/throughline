@@ -11,7 +11,10 @@ This module is the harness layer: it adapts those scorers to LangSmith's
 evaluator signature, and adds the one judge that needs a model call.
 
     source_quality     — cited domains are reputable, none are press-release/wire
-    groundedness       — every quantitative claim carries an inline [n] citation
+    press_release_path — no cited URL is a press release or paid post by its path
+    source_recency     — sources are dated, to the day, inside the week covered
+    groundedness       — every quantitative claim and direct quote carries an
+                         inline [n] citation
     citation_integrity — every [n] resolves 1:1 to a contiguous Sources list
     dedup              — no topic tagged NEW was already covered in a prior week
     voice              — measured tone, not marketing hype (hype-word density)
@@ -28,7 +31,9 @@ from throughline.scoring import (
     score_citation_integrity,
     score_dedup,
     score_groundedness,
+    score_press_release_path,
     score_source_quality,
+    score_source_recency,
     score_voice,
 )
 
@@ -53,6 +58,18 @@ def source_quality(run, example=None) -> dict:
     report, _ = _extract(run, example)
     score, comment = score_source_quality(report)
     return {"key": "source_quality", "score": score, "comment": comment}
+
+
+def press_release_path(run, example=None) -> dict:
+    report, _ = _extract(run, example)
+    score, comment = score_press_release_path(report)
+    return {"key": "press_release_path", "score": score, "comment": comment}
+
+
+def source_recency(run, example=None) -> dict:
+    report, _ = _extract(run, example)
+    score, comment = score_source_recency(report)
+    return {"key": "source_recency", "score": score, "comment": comment}
 
 
 def groundedness(run, example=None) -> dict:

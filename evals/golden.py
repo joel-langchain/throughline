@@ -13,6 +13,11 @@ fault an evaluator should catch:
     weak_sources       — a press-release/wire domain in the citations (source quality)
     citation_mismatch  — sections restart local [n] numbering while Sources stays
                          global, orphaning sources (citation integrity)
+    press_release_path — a press release hosted on a real outlet's site, which
+                         the domain rule cannot see (press release path)
+    stale_source       — a source dated weeks before the week covered (recency)
+    unsourced_quote    — a quote attributed to a person, with no citation
+                         (groundedness)
 
 The clean report and the prior-coverage ledger are self-contained here so the set
 is stable and reproducible; ``golden_examples()`` returns them in LangSmith
@@ -63,14 +68,14 @@ hubs outside the cloud duopoly [7]. Analysts warned that building frontier \
 training capacity overseas carries distinct national-security risk [8].
 
 ## Sources
-1. Reuters — https://www.reuters.com/technology/ai-agents-security-2026-08-05
-2. The Guardian — https://www.theguardian.com/technology/2026/aug/05/ai-security
-3. New York Times — https://www.nytimes.com/2026/08/06/technology/open-weight-model.html
-4. Reuters — https://www.reuters.com/technology/open-weight-cost-2026-08-06
-5. Wall Street Journal — https://www.wsj.com/tech/ai/ai-framework-2026-08-04
-6. Washington Post — https://www.washingtonpost.com/technology/2026/08/04/ai-rules
-7. AP News — https://apnews.com/article/ai-compute-hubs-2026
-8. Bloomberg — https://www.bloomberg.com/news/articles/2026-08-04/frontier-compute-overseas
+1. Reuters — AI agents posed as people in security tests — 2026-08-05 — https://www.reuters.com/technology/ai-agents-security-2026-08-05
+2. The Guardian — Security institute reports deceptive agents — 2026-08-05 — https://www.theguardian.com/technology/2026/aug/05/ai-security
+3. New York Times — Open-weight model matches closed rivals — 2026-08-06 — https://www.nytimes.com/2026/08/06/technology/open-weight-model.html
+4. Reuters — Open-weight model undercuts closed systems on cost — 2026-08-06 — https://www.reuters.com/technology/open-weight-cost-2026-08-06
+5. Wall Street Journal — Administration finalises AI testing framework — 2026-08-04 — https://www.wsj.com/tech/ai/ai-framework-2026-08-04
+6. Washington Post — Legislators criticise closed AI rules process — 2026-08-04 — https://www.washingtonpost.com/technology/2026/08/04/ai-rules
+7. AP News — Science body funds regional compute hubs — 2026-08-05 — https://apnews.com/article/ai-compute-hubs-2026
+8. Bloomberg — Frontier compute moves overseas — 2026-08-04 — https://www.bloomberg.com/news/articles/2026-08-04/frontier-compute-overseas
 """
 
 
@@ -110,8 +115,10 @@ def _off_voice(report: str) -> str:
 def _weak_sources(report: str) -> str:
     """Slip a press-release/wire domain into the citations (a sourcing failure)."""
     return report.replace(
-        "3. New York Times — https://www.nytimes.com/2026/08/06/technology/open-weight-model.html",
-        "3. Vendor release — https://www.prnewswire.com/news/open-weight-model-launch",
+        "3. New York Times — Open-weight model matches closed rivals — 2026-08-06 — "
+        "https://www.nytimes.com/2026/08/06/technology/open-weight-model.html",
+        "3. Vendor release — Open-weight model launch — 2026-08-06 — "
+        "https://www.prnewswire.com/news/open-weight-model-launch",
     )
 
 
@@ -140,6 +147,39 @@ def _citation_mismatch(report: str) -> str:
     )
 
 
+def _press_release_path(report: str) -> str:
+    """Cite a press release hosted on a reputable outlet's own domain.
+
+    Mirrors the 16 Nov 2026 run, which cited kitsapsun.com/press-release/... The
+    domain is on the allow list, so only the path says it is a release.
+    """
+    return report.replace(
+        "https://apnews.com/article/ai-compute-hubs-2026",
+        "https://apnews.com/press-release/ai-compute-hubs-2026",
+    )
+
+
+def _stale_source(report: str) -> str:
+    """Date one source weeks before the week covered.
+
+    The URL still carries the in-window date, so this also checks that the
+    scorer reads the date field, not a date inside the URL.
+    """
+    return report.replace(
+        "undercuts closed systems on cost — 2026-08-06 —",
+        "undercuts closed systems on cost — 2026-07-14 —",
+    )
+
+
+def _unsourced_quote(report: str) -> str:
+    """Quote a person with no citation. No number, so only the quote rule sees it."""
+    return report.replace(
+        "inadequate for the risks it addresses [6].",
+        "inadequate for the risks it addresses [6]. One committee chair said the "
+        'process was "a briefing, not a consultation".',
+    )
+
+
 def golden_examples() -> list[dict]:
     """Return the golden set as LangSmith examples (inputs + reference outputs)."""
     variants: list[tuple[str, str | None, str]] = [
@@ -149,6 +189,9 @@ def golden_examples() -> list[dict]:
         ("defect-off-voice", "off_voice", _off_voice(CLEAN_REPORT)),
         ("defect-weak-sources", "weak_sources", _weak_sources(CLEAN_REPORT)),
         ("defect-citation-mismatch", "citation_mismatch", _citation_mismatch(CLEAN_REPORT)),
+        ("defect-press-release-path", "press_release_path", _press_release_path(CLEAN_REPORT)),
+        ("defect-stale-source", "stale_source", _stale_source(CLEAN_REPORT)),
+        ("defect-unsourced-quote", "unsourced_quote", _unsourced_quote(CLEAN_REPORT)),
     ]
     examples: list[dict] = []
     for name, defect, report in variants:

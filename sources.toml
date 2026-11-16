@@ -24,6 +24,22 @@ deny = [
   "prlog.org",
 ]
 
+# deny_paths: URL path segments that mark a press release or paid post on a site
+# that is otherwise a real outlet (a newspaper hosting syndicated releases, for
+# example). The domain list above cannot see these. Matched as whole path
+# segments, case-insensitively, so "/press-release/" matches but "/press/" does not.
+deny_paths = [
+  "press-release",
+  "press-releases",
+  "pressrelease",
+  "pressreleases",
+  "sponsored",
+  "sponsored-content",
+  "partner-content",
+  "paid-content",
+  "paid-post",
+]
+
 # allow: reputable, independent sources. Tagged "[reputable]" so the model gets a
 # deterministic quality signal instead of guessing. Subdomains are covered too.
 allow = [
