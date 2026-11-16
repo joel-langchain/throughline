@@ -215,9 +215,10 @@ function replay(el, cls) {
   el.classList.add(cls);
 }
 
-// The week's numbers, for the sidebar. Cost and run time arrive a week late.
+// The week's numbers, for the sidebar. Cost and run time are filled in after the
+// run's trace ends, normally a few hours after it publishes.
 function factsOf(run) {
-  const later = (v, f) => (v == null ? h("span", { class: "pending" }, "Added next week") : f(v));
+  const later = (v, f) => (v == null ? h("span", { class: "pending" }, "Added later") : f(v));
   const rows = [];
   if (run.published) {
     const fresh = run.topics.filter((t) => t.status === "new").length;
