@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, timedelta
+from typing import NamedTuple
 from urllib.parse import urlsplit
 
 from throughline.config import (
@@ -199,40 +200,50 @@ def score_source_quality(report: str) -> tuple[float, str]:
     return round(score, 3), f"non-reputable sources: {', '.join(unknown)}"
 
 
-def score_press_release_path(report: str) -> tuple[float, str]:
-    """No cited URL is a press release or paid post, judged by its path.
-
-    The domain rule in score_source_quality catches wire services. It cannot see
-    a release syndicated onto a real outlet's site, such as
-    kitsapsun.com/press-release/..., which carried claims about named
-    legislators in the 16 Nov 2026 report. Binary, like the domain rule: one
-    release is enough to fail.
-    """
-    urls = sorted({u.rstrip(".,);]") for u in _URL.findall(report)})
-    if not urls:
-        return 1.0, "no cited URLs"
-    hits = [u for u in urls if _is_press_release_path(u)]
-    if hits:
-        return 0.0, f"press release or paid post cited: {', '.join(hits)}"
-    return 1.0, f"none of {len(urls)} cited URLs is a press release by its path"
+def _cited_urls(report: str) -> list[str]:
+    return sorted({u.rstrip(".,);]") for u in _URL.findall(report)})
 
 
-def score_source_recency(report: str, run_date: date | None = None) -> tuple[float, str]:
-    """Share of sources dated, to the day, inside the week the report covers.
+def press_release_urls(report: str) -> list[str]:
+    """Cited URLs whose path marks a press release or paid post."""
+    return [u for u in _cited_urls(report) if _is_press_release_path(u)]
 
-    Each Sources line reads "<outlet> — <title> — <date> — <url>". A source counts
-    only when its date has a day and falls in the RECENCY_WINDOW_DAYS up to the
-    report date. A month-only date ("2026-11") or a missing one cannot be checked,
-    so it does not count, and nor does a source from before the window, which is
-    older news presented as this week's. The date is read with the URL removed,
-    because URLs often carry dates of their own.
+
+def source_lines(report: str) -> dict[str, str]:
+    """Each numbered Sources entry's text, keyed by its number, number stripped."""
+    lines: dict[str, str] = {}
+    for line in _sources_block(report).splitlines():
+        entry = _SOURCE_ENTRY.match(line)
+        if entry:
+            lines[entry.group(1)] = line[entry.end() - 1 :].strip()
+    return lines
+
+
+class SourceDates(NamedTuple):
+    """Where each source's date falls against the week the report covers."""
+
+    start: date
+    end: date
+    total: int
+    outside: list[tuple[str, str]]  # (source number, ISO date) before or after the week
+    no_day: list[str]  # source numbers dated to the month only
+    undated: list[str]  # source numbers with no readable date
+
+
+def source_dates(report: str, run_date: date | None = None) -> SourceDates | None:
+    """Check each Sources date against the week up to the report date.
+
+    Returns None when there is no run date and the title carries none either.
+    The date is read with the URL removed, because URLs often carry dates of
+    their own, and the last date on the line wins because the date field
+    follows the title.
     """
     run_date = run_date or _report_date(report)
     if run_date is None:
-        return 1.0, "no report date in the title to check sources against"
+        return None
     start = run_date - timedelta(days=RECENCY_WINDOW_DAYS)
     total = 0
-    outside: list[str] = []
+    outside: list[tuple[str, str]] = []
     no_day: list[str] = []
     undated: list[str] = []
     for line in _sources_block(report).splitlines():
@@ -245,7 +256,7 @@ def score_source_recency(report: str, run_date: date | None = None) -> tuple[flo
         if not dates:
             undated.append(n)
             continue
-        year, month, day = dates[-1]  # the date field follows the title
+        year, month, day = dates[-1]
         if not day:
             no_day.append(n)
             continue
@@ -255,46 +266,85 @@ def score_source_recency(report: str, run_date: date | None = None) -> tuple[flo
             undated.append(n)
             continue
         if not start <= when <= run_date:
-            outside.append(f"[{n}] {when.isoformat()}")
-    if total == 0:
+            outside.append((n, when.isoformat()))
+    return SourceDates(start, run_date, total, outside, no_day, undated)
+
+
+def score_press_release_path(report: str) -> tuple[float, str]:
+    """No cited URL is a press release or paid post, judged by its path.
+
+    The domain rule in score_source_quality catches wire services. It cannot see
+    a release syndicated onto a real outlet's site, such as
+    kitsapsun.com/press-release/..., which carried claims about named
+    legislators in the 16 Nov 2026 report. Binary, like the domain rule: one
+    release is enough to fail.
+    """
+    urls = _cited_urls(report)
+    if not urls:
+        return 1.0, "no cited URLs"
+    hits = press_release_urls(report)
+    if hits:
+        return 0.0, f"press release or paid post cited: {', '.join(hits)}"
+    return 1.0, f"none of {len(urls)} cited URLs is a press release by its path"
+
+
+def score_source_recency(report: str, run_date: date | None = None) -> tuple[float, str]:
+    """Share of sources dated, to the day, inside the week the report covers.
+
+    Each Sources line reads "<outlet> — <title> — <date> — <url>". A source counts
+    only when its date has a day and falls in the RECENCY_WINDOW_DAYS up to the
+    report date. A month-only date ("2026-11") or a missing one cannot be checked,
+    so it does not count, and nor does a source from before the window, which is
+    older news presented as this week's.
+    """
+    dates = source_dates(report, run_date)
+    if dates is None:
+        return 1.0, "no report date in the title to check sources against"
+    if dates.total == 0:
         return 1.0, "no sources to date"
-    in_window = total - len(outside) - len(no_day) - len(undated)
-    if in_window == total:
-        return 1.0, f"all {total} sources dated {start} to {run_date}"
+    start, end = dates.start, dates.end
+    in_window = dates.total - len(dates.outside) - len(dates.no_day) - len(dates.undated)
+    if in_window == dates.total:
+        return 1.0, f"all {dates.total} sources dated {start} to {end}"
     notes: list[str] = []
-    if outside:
-        notes.append(f"dated outside {start} to {run_date}: {', '.join(outside)}")
-    if no_day:
-        notes.append(f"no day in the date: {', '.join(f'[{n}]' for n in no_day)}")
-    if undated:
-        notes.append(f"undated: {', '.join(f'[{n}]' for n in undated)}")
-    return round(in_window / total, 3), "; ".join(notes)
+    if dates.outside:
+        listed = ", ".join(f"[{n}] {iso}" for n, iso in dates.outside)
+        notes.append(f"dated outside {start} to {end}: {listed}")
+    if dates.no_day:
+        notes.append(f"no day in the date: {', '.join(f'[{n}]' for n in dates.no_day)}")
+    if dates.undated:
+        notes.append(f"undated: {', '.join(f'[{n}]' for n in dates.undated)}")
+    return round(in_window / dates.total, 3), "; ".join(notes)
 
 
-def score_groundedness(report: str) -> tuple[float, str]:
-    """Every quantitative claim and every direct quote carries an inline [n] citation.
+def uncited_claims(report: str) -> tuple[int, list[str]]:
+    """How many claims the report makes, and the uncited ones in full.
 
     A sentence is a claim if it holds a number or quotes someone. A quote is a
     claim about what a named person or organisation said, so it needs a source as
     much as a figure does. Quotation marks around a term, with no one said to
     have said it, are not a quote.
     """
-    total = cited = 0
+    total = 0
     uncited: list[str] = []
     for sentence in _sentences(_body(report)):
         bare = _CITE.sub("", sentence)
         if re.search(r"\d", bare) or _has_quote(bare):
             total += 1
-            if _CITE.search(sentence):
-                cited += 1
-            else:
-                uncited.append(" ".join(sentence.split())[:70])
+            if not _CITE.search(sentence):
+                uncited.append(" ".join(sentence.split()))
+    return total, uncited
+
+
+def score_groundedness(report: str) -> tuple[float, str]:
+    """Every quantitative claim and every direct quote carries an inline [n] citation."""
+    total, uncited = uncited_claims(report)
     if total == 0:
         return 1.0, "no quantitative claims or quotes to ground"
-    score = cited / total
     if not uncited:
         return 1.0, f"all {total} quantitative claims and quotes cited"
-    return round(score, 3), f"uncited claim(s): {'; '.join(uncited)}"
+    score = (total - len(uncited)) / total
+    return round(score, 3), f"uncited claim(s): {'; '.join(c[:70] for c in uncited)}"
 
 
 def score_citation_integrity(report: str) -> tuple[float, str]:
@@ -351,6 +401,12 @@ def score_dedup(report: str, coverage: str) -> tuple[float, str]:
     if repeats:
         return 0.0, f"topic tagged NEW but already covered: {', '.join(repeats)}"
     return 1.0, "no repeated topics"
+
+
+def hype_terms_found(report: str) -> list[str]:
+    """The hype terms that appear in the report body, each listed once."""
+    lower = _body(report).lower()
+    return [term for term in HYPE_TERMS if term in lower]
 
 
 def score_voice(report: str) -> tuple[float, str]:
