@@ -59,6 +59,7 @@ from throughline.models import model, strong_model
 from throughline.monitoring import _current_run_id as current_trace_id
 from throughline.monitoring import alert_reason, alert_text
 from throughline.monitoring import record as record_run_signals
+from throughline.prepublish import findings_block, report_findings
 from throughline.publish import publish_run
 from throughline.quarantine import QuarantineSourcesMiddleware
 from throughline.schemas import FinalPassResult, ResearchResult, VerificationResult
@@ -285,13 +286,15 @@ How to work:
 2. Read it end to end as a subscriber would and check the whole-report qualities:
    - COHERENCE: the topics form one thread, not a disconnected list; the opening
      paragraph's "what actually happened / where the market is moving" actually
-     matches the sections that follow. If the intro claims storylines "converge"
+     matches the sections that follow. Each paragraph belongs to its section's
+     story; flag one that does not support the section's heading. If the intro claims storylines "converge"
      or "connect", a body section must actually make that link — flag an intro
      promise the body never delivers. Flag an unexplained prior-week callback that
      assumes the reader saw last week's edition.
    - CONTINUITY: if there are DEVELOPING storylines, the "Since last week:" thread
      reads sensibly and each developing section leads with what changed.
-   - CONSISTENCY: no two sections contradict each other; the framing is even.
+   - CONSISTENCY: no two statements contradict each other, within a section or
+     across sections; the framing is even.
    - COMPLETENESS: required structure is present (title with date, intro
      paragraph, one "##" section per kept topic, a "## Sources" list) and nothing
      is a leftover placeholder, TODO, empty heading, or truncated sentence.
@@ -303,6 +306,16 @@ How to work:
      is never cited in the prose.
    - PRECISION: flag a count given as a range for a single quantity, and a
      comparative (e.g. "100x cheaper") stated without the unit it is measured in.
+   - NUMBERS: when a sentence works one figure out from others ("implying", "a
+     total of", "up from", a share, a per-unit price), check that it follows from
+     the inputs the sentence gives. Flag one that does not, for example a
+     company valuation said to be implied by the number of shares on sale.
+   - HEADINGS: a section heading claims no more than its body shows. Flag a
+     heading that states a cause or a sweeping trend when the body's own evidence
+     is partial, mixed, or unconfirmed.
+3. If these instructions end with AUTOMATED CHECK FINDINGS, code checks have
+   already found the defects listed there. Put each "must fix" finding in your
+   issues and return REVISE. Do not re-check or dispute them.
 
 YOUR REPLY:
 Return the structured result you have been given a schema for: an APPROVE/REVISE
@@ -318,6 +331,26 @@ final_pass_permissions = [
     FilesystemPermission(operations=["write"], paths=["/**"], mode="deny"),
 ]
 
+def with_findings(system_message: object, files: dict | None) -> str:
+    """The reviewer's instructions with the code checks' findings on the draft appended.
+
+    The reviewer reads the draft and judges it; the code checks are exact where it
+    is not (an uncited figure, a press release, a source from before the week).
+    """
+    base = _system_text(system_message)
+    draft = _report_body(files)
+    block = findings_block(report_findings(draft)) if draft else ""
+    return f"{base}\n\n{block}" if block else base
+
+
+@dynamic_prompt
+def final_pass_findings_middleware(request) -> str:
+    # Recomputed on every reviewer call, so a re-review sees the edited draft.
+    return with_findings(
+        request.system_message, (getattr(request, "state", None) or {}).get("files")
+    )
+
+
 final_pass_reviewer = {
     "name": "final-pass-reviewer",
     "description": (
@@ -329,7 +362,7 @@ final_pass_reviewer = {
     "tools": [],
     "model": model,
     "permissions": final_pass_permissions,
-    "middleware": subagent_middleware,
+    "middleware": [*subagent_middleware, final_pass_findings_middleware],
     "response_format": FinalPassResult,
 }
 
@@ -464,7 +497,10 @@ Work in this order:
    last read-through before publishing.
    - If the verdict is APPROVE, proceed.
    - If REVISE, fix the concrete issues it lists by editing /output/report.md
-     (write the corrected report back to the same path), then delegate to the
+     (write the corrected report back to the same path). A claim with no
+     citation gets a [[url]] from that topic's research, or is cut. A claim that
+     rests only on a press release is cut. A source from before the week gets its
+     date said in the text, or is cut. Then delegate to the
      final-pass-reviewer ONE more time to confirm. Do this re-review AT MOST once;
      if it still reports issues, apply the clearest fixes and move on. Do NOT
      re-run research or re-write topic summaries here — this pass is about the
