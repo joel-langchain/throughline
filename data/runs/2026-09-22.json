@@ -36,7 +36,8 @@
     "topic_count": 4.0,
     "topics_kept": 7.0,
     "verification_flags": 6.0,
-    "voice": 1.0
+    "voice": 1.0,
+    "press_release_path": 1.0
   },
   "trace_id": "01a0ca06-06c9-7441-8f23-3e548946a019",
   "cost_usd": 6.21,

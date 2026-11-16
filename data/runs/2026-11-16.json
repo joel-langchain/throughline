@@ -42,7 +42,9 @@
     "groundedness": 0.905,
     "citation_integrity": 1.0,
     "voice": 1.0,
-    "dedup": 1.0
+    "dedup": 1.0,
+    "press_release_path": 0.0,
+    "source_recency": 0.758
   },
   "trace_id": "01a1e2ba-03c1-7191-b73c-6574eafdf3ce",
   "cost_usd": null,
