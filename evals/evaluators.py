@@ -19,6 +19,12 @@ evaluator signature, and adds the one judge that needs a model call.
     dedup              — no topic tagged NEW was already covered in a prior week
     voice              — measured tone, not marketing hype (hype-word density)
     voice_judge        — LLM-as-judge for the prose quality code can't grade
+    logic_numbers      — every derived figure follows from the figures it cites
+    logic_contradictions — no two sentences say opposite things about one subject
+    logic_headings     — no heading claims more than its section shows
+
+The three logic scorers are the pre-publish logic check (`throughline.logic_check`)
+run on its own, one kind at a time. Like the voice judge they need model calls.
 
 Each returns a LangSmith feedback dict {"key", "score", "comment"} and tolerates
 being called with a RunTree (local evaluate()) or a plain dict (online).
@@ -26,6 +32,7 @@ being called with a RunTree (local evaluate()) or a plain dict (online).
 
 from __future__ import annotations
 
+from throughline import logic_check
 from throughline.scoring import (
     HYPE_TERMS,  # noqa: F401  (re-exported: tests and callers import it from here)
     score_citation_integrity,
@@ -129,3 +136,24 @@ def voice_judge(run, example=None) -> dict:
         "score": 1.0 if verdict.on_voice else 0.0,
         "comment": verdict.reason,
     }
+
+
+def _logic(run, example, kind: logic_check.Kind, key: str) -> dict:
+    report, _ = _extract(run, example)
+    score, comment = logic_check.score(logic_check.check(report, (kind,)), kind)
+    return {"key": key, "score": score, "comment": comment}
+
+
+def logic_numbers(run, example=None) -> dict:
+    """Derived figures that do not follow from their inputs (one model call)."""
+    return _logic(run, example, "derived_figure", "logic_numbers")
+
+
+def logic_contradictions(run, example=None) -> dict:
+    """Sentences that disagree about one subject (two model calls, run at once)."""
+    return _logic(run, example, "contradiction", "logic_contradictions")
+
+
+def logic_headings(run, example=None) -> dict:
+    """Headings that claim more than their sections show (one model call)."""
+    return _logic(run, example, "heading", "logic_headings")

@@ -32,12 +32,14 @@ persisted by the runner mirroring /memories/ to ./memory; on deployment that pat
 swaps to a persistent StoreBackend with no change to this agent.
 """
 
+import dataclasses
 import re
 from datetime import date
 
 from deepagents import FilesystemPermission, create_deep_agent
 from deepagents.backends import CompositeBackend, StateBackend, StoreBackend
 from langchain.agents.middleware import (
+    AgentMiddleware,
     InterruptOnConfig,
     ToolRetryMiddleware,
     after_agent,
@@ -45,7 +47,10 @@ from langchain.agents.middleware import (
     dynamic_prompt,
 )
 from langchain.agents.middleware.types import ToolCallRequest
+from langchain_core.messages import ToolMessage
+from langgraph.types import Command
 
+from throughline import logic_check
 from throughline.citations import renumber as renumber_citations
 from throughline.config import (
     MAX_VERIFY_RETRIES,
@@ -505,6 +510,9 @@ Work in this order:
      if it still reports issues, apply the clearest fixes and move on. Do NOT
      re-run research or re-write topic summaries here — this pass is about the
      assembled report only.
+   - An issue that begins "Logic check" comes from a separate check that does the
+     arithmetic, compares sentences, and holds each heading against its section.
+     It quotes the sentence or heading at fault. Fix that text as the issue says.
 9. UPDATE YOUR MEMORY so next week can build on this one. Write TWO files:
    a) /memories/coverage.md — the running ledger. Keep the prior entries, then
       append a section for this week:
@@ -561,6 +569,119 @@ task_failure_guard = ToolRetryMiddleware(
     tools=["task"],
     on_failure=_task_failure_message,
 )
+
+
+# --- A logic check alongside the final-pass reviewer -------------------------
+
+# The final-pass reviewer reads for coherence and misses arithmetic that does not
+# add up, two sentences that disagree, and headings that claim more than their
+# sections show (see logic_check.py). A narrow judge checks those three. Runs
+# must not get longer, so it starts in the background as soon as the report is
+# written, runs while the editor briefs the reviewer and the reviewer reads, and
+# is collected when the reviewer returns. Its findings join the reviewer's
+# issues and turn APPROVE into REVISE, so the editor fixes them in the revision
+# pass it already has. Only the first review is checked: the confirming
+# re-review would wait on a second check, and its verdict ends the pass either
+# way. A check that fails or overruns its wait leaves the reviewer's result as
+# it was.
+
+
+def _is_review_call(request: ToolCallRequest) -> bool:
+    tool_call = request.tool_call
+    if tool_call.get("name") != "task":
+        return False
+    return tool_call.get("args", {}).get("subagent_type") == final_pass_reviewer["name"]
+
+
+def _reviews_so_far(state: dict | None) -> int:
+    """How many final-pass reviews the editor has asked for, the current one included."""
+    count = 0
+    for message in (state or {}).get("messages") or []:
+        for call in getattr(message, "tool_calls", None) or []:
+            if call.get("name") == "task" and (
+                call.get("args", {}).get("subagent_type") == final_pass_reviewer["name"]
+            ):
+                count += 1
+    return count
+
+
+def _add_logic_findings(
+    message: object, findings: list[logic_check.LogicFinding]
+) -> object:
+    """A reviewer ToolMessage with the findings added, or the message unchanged."""
+    if not isinstance(message, ToolMessage) or message.status == "error":
+        return message
+    try:
+        result = FinalPassResult.model_validate_json(message.text)
+    except ValueError:
+        return message
+    merged = result.model_copy(
+        update={
+            "verdict": "REVISE",
+            "issues": [*result.issues, *(f.issue() for f in findings)],
+            "note": f"{result.note} The logic check found {len(findings)} problem(s), "
+            "listed in the issues.",
+        }
+    )
+    return message.model_copy(update={"content": merged.model_dump_json()})
+
+
+def merge_logic_findings(
+    result: object, findings: list[logic_check.LogicFinding]
+) -> object:
+    """The reviewer's tool result with the logic findings in its issues."""
+    if not findings:
+        return result
+    if isinstance(result, Command) and isinstance(result.update, dict):
+        messages = result.update.get("messages") or []
+        merged = [_add_logic_findings(m, findings) for m in messages]
+        return dataclasses.replace(result, update={**result.update, "messages": merged})
+    return _add_logic_findings(result, findings)
+
+
+def _write_succeeded(result: object) -> bool:
+    return not (isinstance(result, ToolMessage) and result.status == "error")
+
+
+class LogicCheckMiddleware(AgentMiddleware):
+    """Start the logic check on the report write; add its findings to the review."""
+
+    def wrap_tool_call(self, request, handler):
+        if _reviews_so_far(request.state) > (1 if _is_review_call(request) else 0):
+            return handler(request)
+        if _is_report_write(request):
+            result = handler(request)
+            if _write_succeeded(result):
+                logic_check.start(request.tool_call["args"].get("content", ""))
+            return result
+        if not _is_review_call(request):
+            return handler(request)
+        # Joins the check started on the write, or starts one if the editor
+        # changed the report with edit_file instead.
+        pending = logic_check.start(
+            _report_body((request.state or {}).get("files")) or ""
+        )
+        result = handler(request)
+        return merge_logic_findings(result, logic_check.collect(pending))
+
+    async def awrap_tool_call(self, request, handler):
+        if _reviews_so_far(request.state) > (1 if _is_review_call(request) else 0):
+            return await handler(request)
+        if _is_report_write(request):
+            result = await handler(request)
+            if _write_succeeded(result):
+                logic_check.start(request.tool_call["args"].get("content", ""))
+            return result
+        if not _is_review_call(request):
+            return await handler(request)
+        pending = logic_check.start(
+            _report_body((request.state or {}).get("files")) or ""
+        )
+        result = await handler(request)
+        return merge_logic_findings(result, await logic_check.acollect(pending))
+
+
+logic_check_middleware = LogicCheckMiddleware()
 
 
 # --- Human review before the report is finalised ---------------------------
@@ -773,6 +894,8 @@ def build_agent(checkpointer=None, *, persistent_memory=False, review=True):
         middleware=[
             reset_search_outage_middleware,
             todays_date_middleware,
+            # Outside the guard, so a retried review is checked once.
+            logic_check_middleware,
             task_failure_guard,
             renumber_citations_middleware,
         ],

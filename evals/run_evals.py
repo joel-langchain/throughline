@@ -6,10 +6,11 @@ each planted-defect example should be caught by its matching evaluator.
 
 Usage:
     uv run python -m evals.run_evals               # deterministic evaluators
-    uv run python -m evals.run_evals --with-judge  # also run the LLM voice judge
+    uv run python -m evals.run_evals --with-judge  # also run the model judges
 
-Requires LANGSMITH_API_KEY in the environment (.env). The LLM judge additionally
-needs ANTHROPIC_API_KEY (one cheap call per example).
+Requires LANGSMITH_API_KEY in the environment (.env). The model judges also need
+ANTHROPIC_API_KEY: the voice judge makes one cheap call per example, and the
+three logic scorers make four Sonnet calls per example between them.
 """
 
 from __future__ import annotations
@@ -52,7 +53,12 @@ def main() -> None:
         evaluators.voice,
     ]
     if "--with-judge" in sys.argv[1:]:
-        chosen.append(evaluators.voice_judge)
+        chosen += [
+            evaluators.voice_judge,
+            evaluators.logic_numbers,
+            evaluators.logic_contradictions,
+            evaluators.logic_headings,
+        ]
 
     results = evaluate(
         as_report,
