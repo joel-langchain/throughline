@@ -47,7 +47,9 @@ from throughline.scoring import (
     score_citation_integrity,
     score_dedup,
     score_groundedness,
+    score_press_release_path,
     score_source_quality,
+    score_source_recency,
     score_voice,
 )
 
@@ -180,6 +182,8 @@ def report_signals(report: str, coverage: str) -> list[Signal]:
         return []
     checks = (
         ("source_quality", score_source_quality(report)),
+        ("press_release_path", score_press_release_path(report)),
+        ("source_recency", score_source_recency(report)),
         ("groundedness", score_groundedness(report)),
         ("citation_integrity", score_citation_integrity(report)),
         ("voice", score_voice(report)),

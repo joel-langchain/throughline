@@ -26,7 +26,9 @@ from evals.evaluators import (
     score_citation_integrity,
     score_dedup,
     score_groundedness,
+    score_press_release_path,
     score_source_quality,
+    score_source_recency,
     score_voice,
 )
 from evals.golden import golden_examples
@@ -44,6 +46,9 @@ DEFECT_TO_EVALUATOR = {
     "off_voice": "voice",
     "weak_sources": "source_quality",
     "citation_mismatch": "citation_integrity",
+    "press_release_path": "press_release_path",
+    "stale_source": "source_recency",
+    "unsourced_quote": "groundedness",
 }
 
 
@@ -51,6 +56,8 @@ def _score_all(report: str, coverage: str) -> dict[str, tuple[float, str]]:
     """Run every deterministic evaluator and return {name: (score, comment)}."""
     return {
         "source_quality": score_source_quality(report),
+        "press_release_path": score_press_release_path(report),
+        "source_recency": score_source_recency(report),
         "groundedness": score_groundedness(report),
         "citation_integrity": score_citation_integrity(report),
         "dedup": score_dedup(report, coverage),
@@ -80,7 +87,7 @@ def test_defect_coverage_is_complete() -> None:
     )
 
 
-@pytest.mark.parametrize("evaluator", sorted(DEFECT_TO_EVALUATOR.values()))
+@pytest.mark.parametrize("evaluator", sorted(set(DEFECT_TO_EVALUATOR.values())))
 def test_clean_report_scores_perfectly(evaluator: str) -> None:
     """The clean reference report trips no evaluator (no false positives)."""
     inputs = _CLEAN["inputs"]

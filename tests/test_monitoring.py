@@ -233,6 +233,8 @@ def test_run_signals_covers_health_and_quality_together() -> None:
         "final_pass_revisions",
         "delivery_ok",
         "source_quality",
+        "press_release_path",
+        "source_recency",
         "groundedness",
         "citation_integrity",
         "voice",
