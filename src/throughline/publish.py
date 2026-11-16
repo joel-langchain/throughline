@@ -10,10 +10,12 @@ A run whose alert fired is not published. It is recorded as held, with the reaso
 and no report, so a broken or doubtful week never goes public unreviewed and a
 lost week still shows up as lost rather than silently missing.
 
-Cost, cost by stage, and duration are not known until a run has ended, so each
-run fills them in for earlier weeks from their LangSmith traces. The latest week
-shows them a week late. Cost here is model calls only; search is billed by its
-own plan and is not in the trace.
+Cost, cost by stage, and duration are not known until a run has ended, and a run
+publishes before its own trace ends. So they are filled in from the LangSmith
+traces of earlier weeks: by a scheduled job a few hours after the Monday run
+(``fill_pending_costs``, run by .github/workflows/fill-costs.yml), and by each
+run for any week the job missed. Cost here is model calls only; search is billed
+by its own plan and is not in the trace.
 
 Configured by ``SITE_GITHUB_TOKEN`` (a token that can write this repo's contents)
 and ``SITE_REPO`` (``owner/name``), with ``SITE_BRANCH`` defaulting to ``site``.
@@ -39,7 +41,8 @@ logger = logging.getLogger("throughline.publish")
 
 _API = "https://api.github.com"
 INDEX_PATH = "data/index.json"
-# How far back to look for a week's trace. Weeks normally fill a week late.
+# How far back to look for a week's trace. Weeks normally fill the same day, or
+# a week late if the scheduled job missed them.
 _LOOKBACK_DAYS = 60
 _TITLE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 _TOPIC = re.compile(r"^##\s+(.+?)\s*(?:\((new|developing)\))?\s*$", re.MULTILINE | re.IGNORECASE)
@@ -280,14 +283,15 @@ async def _fetch_traces(trace_ids: list[str], project_name: str) -> dict[str, tu
     return found
 
 
-def _langsmith_reader(trace_ids: list[str]):
+def _langsmith_reader(trace_ids: list[str], project: str | None = None):
     """``(read_run, read_stages)`` for these traces, or None when they can't be read.
 
-    The LangSmith calls are async and this runs at the end of the graph, possibly
-    inside a running event loop, so they run together on a worker thread with its
-    own loop.
+    ``project`` is the tracing project's name; inside a run it defaults to the
+    run's own. The LangSmith calls are async and this runs at the end of the
+    graph, possibly inside a running event loop, so they run together on a worker
+    thread with its own loop.
     """
-    project = _tracing_project()
+    project = project or _tracing_project()
     if not trace_ids or not project:
         return None
     try:
@@ -344,3 +348,57 @@ def publish_run(
     _log(f"{outcome}: {day} to {repo}@{branch}; cost filled for {filled} of "
          f"{len(pending)} week(s) still missing it")
     return outcome
+
+
+# --- the same-day fill (scheduled job) -------------------------------------------
+
+
+def fill_pending_costs(project: str) -> str:
+    """Fill cost and run time for the weeks still missing them. Returns what it did.
+
+    Run by a scheduled job a few hours after the Monday run, once that run's trace
+    has ended, so the latest week shows its cost and run time the same day rather
+    than when the next run publishes. It changes only ``data/index.json`` on the
+    site branch, and only the weeks still missing a cost. A trace that has not
+    ended yet is left for the next attempt.
+
+    Unlike ``publish_run`` this raises when it is not configured, when GitHub
+    fails, or when the traces cannot be read, so the job fails where it is seen.
+    """
+    token = os.environ.get("SITE_GITHUB_TOKEN", "").strip()
+    repo = os.environ.get("SITE_REPO", "").strip()
+    branch = os.environ.get("SITE_BRANCH", "site").strip() or "site"
+    if not token or not repo:
+        raise RuntimeError("set SITE_GITHUB_TOKEN and SITE_REPO")
+    index, sha = _read(repo, branch, INDEX_PATH, token)
+    if not index:
+        return f"nothing to fill: no {INDEX_PATH} on {repo}@{branch}"
+    pending = pending_traces(index)
+    if not pending:
+        return "nothing to fill: every week has its cost"
+    readers = _langsmith_reader(pending, project)
+    if readers is None:
+        raise RuntimeError(f"could not read traces from the tracing project {project!r}")
+    filled = fill_costs(index, *readers)
+    if filled:
+        index["updated"] = datetime.now(UTC).isoformat(timespec="seconds")
+        _write(repo, branch, INDEX_PATH, token, index, sha, "data: cost and run time")
+    return f"cost filled for {filled} of {len(pending)} week(s) missing it"
+
+
+def main() -> int:
+    """``python -m throughline.publish``: the scheduled same-day fill."""
+    project = os.environ.get("LANGSMITH_PROJECT", "").strip()
+    if not project:
+        _log("failed: set LANGSMITH_PROJECT to the tracing project's name")
+        return 1
+    try:
+        _log(fill_pending_costs(project))
+    except Exception as exc:  # noqa: BLE001 - report it and fail the job
+        _log(f"failed: {type(exc).__name__}: {exc}")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

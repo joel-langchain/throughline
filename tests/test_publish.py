@@ -1,8 +1,9 @@
 """The public dashboard is read-only, and a doubtful week never reaches it.
 
-The weekly run is the dashboard's only writer: it adds the week's report, topics,
-and scores to the repo's ``site`` branch. A run whose alert fired is recorded as
-held, with the reason and no report. All offline (no GitHub, no LangSmith).
+The weekly run adds the week's report, topics, and scores to the repo's ``site``
+branch. A run whose alert fired is recorded as held, with the reason and no
+report. A scheduled job fills in cost and run time once the run's trace has
+ended, and changes nothing else. All offline (no GitHub, no LangSmith).
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ SIGNALS = [
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    for var in ("SITE_GITHUB_TOKEN", "SITE_REPO", "SITE_BRANCH",
+    for var in ("SITE_GITHUB_TOKEN", "SITE_REPO", "SITE_BRANCH", "LANGSMITH_PROJECT",
                 "SLACK_BOT_TOKEN", "SLACK_CHANNEL_ID", "SLACK_WEBHOOK_URL"):
         monkeypatch.delenv(var, raising=False)
 
@@ -355,3 +356,99 @@ def test_only_weeks_missing_a_cost_are_looked_up() -> None:
         {"trace_id": None, "cost_usd": None},
     ]}
     assert publish.pending_traces(index) == ["a"]
+
+
+# --- the same-day fill (scheduled job) -------------------------------------------
+
+PENDING_INDEX = {"updated": "2026-11-16T05:30:33+00:00", "runs": [
+    {"date": "2026-11-16", "trace_id": "latest", "cost_usd": None, "duration_minutes": None,
+     "scores": {"source_count": 33.0}},
+    {"date": "2026-11-09", "trace_id": "earlier", "cost_usd": 8.52, "duration_minutes": 26.1},
+]}
+
+
+def _readers(end_time):
+    start = datetime(2026, 11, 16, 5, 0, tzinfo=UTC)
+    run = SimpleNamespace(total_cost=7.456, start_time=start, end_time=end_time)
+    return (lambda _t: run), (lambda _t: {"editor": 3.0, "citation-verifier": 4.4})
+
+
+def _configure_fill(monkeypatch, fake, readers, asked=None):
+    monkeypatch.setenv("SITE_GITHUB_TOKEN", "ghp_test_token_value")
+    monkeypatch.setenv("SITE_REPO", "someone/throughline")
+    monkeypatch.setattr(publish, "_request", fake)
+
+    def reader(ids, project=None):
+        if asked is not None:
+            asked.append((list(ids), project))
+        return readers
+
+    monkeypatch.setattr(publish, "_langsmith_reader", reader)
+
+
+def test_the_scheduled_job_fills_the_latest_week_the_same_day(monkeypatch) -> None:
+    fake = _FakeGitHub({publish.INDEX_PATH: PENDING_INDEX})
+    asked: list = []
+    _configure_fill(monkeypatch, fake, _readers(datetime(2026, 11, 16, 5, 26, tzinfo=UTC)), asked)
+
+    outcome = publish.fill_pending_costs("throughline-prod")
+
+    assert outcome == "cost filled for 1 of 1 week(s) missing it"
+    assert asked == [(["latest"], "throughline-prod")], "only the missing week, in the named project"
+    [write] = fake.writes
+    assert write["path"] == publish.INDEX_PATH and write["branch"] == "site"
+    assert write["sha"] == f"sha-{publish.INDEX_PATH}", "an update must name the old blob"
+    latest, earlier = write["data"]["runs"]
+    assert latest["cost_usd"] == 7.46 and latest["duration_minutes"] == 26.0
+    assert latest["cost_by_stage"] == {"editor": 3.0, "citation-verifier": 4.4}
+    assert latest["scores"] == {"source_count": 33.0}, "nothing else changes"
+    assert earlier == PENDING_INDEX["runs"][1]
+
+
+def test_a_trace_that_has_not_ended_is_left_for_the_next_attempt(monkeypatch) -> None:
+    fake = _FakeGitHub({publish.INDEX_PATH: PENDING_INDEX})
+    _configure_fill(monkeypatch, fake, _readers(None))
+    assert publish.fill_pending_costs("throughline-prod") == "cost filled for 0 of 1 week(s) missing it"
+    assert fake.writes == [], "no write when nothing was filled"
+
+
+def test_nothing_pending_means_no_trace_lookup(monkeypatch) -> None:
+    done = {"runs": [PENDING_INDEX["runs"][1]]}
+    fake = _FakeGitHub({publish.INDEX_PATH: done})
+    asked: list = []
+    _configure_fill(monkeypatch, fake, None, asked)
+    assert publish.fill_pending_costs("throughline-prod").startswith("nothing to fill")
+    assert asked == [] and fake.writes == []
+
+
+def test_the_job_fails_visibly_when_traces_cannot_be_read(monkeypatch, capsys) -> None:
+    fake = _FakeGitHub({publish.INDEX_PATH: PENDING_INDEX})
+    _configure_fill(monkeypatch, fake, None)
+    monkeypatch.setenv("LANGSMITH_PROJECT", "throughline-prod")
+    with pytest.raises(RuntimeError):
+        publish.fill_pending_costs("throughline-prod")
+    assert publish.main() == 1
+    out = capsys.readouterr().out
+    assert "could not read traces" in out
+    assert "ghp_test_token_value" not in out
+    assert fake.writes == []
+
+
+def test_the_job_needs_its_configuration(monkeypatch) -> None:
+    assert publish.main() == 1, "no LANGSMITH_PROJECT"
+    monkeypatch.setenv("LANGSMITH_PROJECT", "throughline-prod")
+    assert publish.main() == 1, "no SITE_GITHUB_TOKEN or SITE_REPO"
+
+
+def test_a_named_project_is_used_outside_a_run(monkeypatch) -> None:
+    monkeypatch.setattr(publish, "_tracing_project", lambda: None)
+    run = SimpleNamespace(total_cost=1.0, start_time=None, end_time=None)
+    seen: list = []
+
+    async def fake_fetch(trace_ids, project):
+        seen.append(project)
+        return {t: (run, None) for t in trace_ids}
+
+    monkeypatch.setattr(publish, "_fetch_traces", fake_fetch)
+    read_run, _ = publish._langsmith_reader(["t"], "throughline-prod")
+    assert read_run("t") is run and seen == ["throughline-prod"]

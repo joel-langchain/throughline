@@ -331,6 +331,12 @@ SITE_GITHUB_TOKEN=github_pat_...   # fine-grained, Contents read/write on this r
 SITE_REPO=owner/throughline
 ```
 
+A run publishes before its own trace has ended, so its cost and run time come
+later. The [fill-costs](.github/workflows/fill-costs.yml) workflow adds them at
+07:00 and 11:00 UTC on Mondays, from the finished trace. It needs a
+`LANGSMITH_API_KEY` repository secret. Any week it misses is filled by the next
+run.
+
 **Deliver to Slack** (optional). Add these as deployment secrets and each finished
 run posts a summary to the channel with the full report in its thread:
 

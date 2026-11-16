@@ -1,0 +1,49 @@
+name: Fill cost and run time
+
+# The Monday run publishes its report before its own trace has ended, so it
+# cannot record its own cost or run time. This job fills them in the same day:
+# it reads the finished trace from LangSmith and updates data/index.json on the
+# site branch (publish.fill_pending_costs). It changes only that file, and only
+# the weeks still missing a cost. A trace that has not ended yet is left alone,
+# so the second schedule is a retry for a long run. Any week both miss is filled
+# by the next Monday run, as before.
+#
+# Needs the LANGSMITH_API_KEY repository secret (read access to the
+# throughline-prod tracing project). Writes with this job's own GITHUB_TOKEN.
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"   # two hours after the 05:00 UTC run starts
+    - cron: "0 11 * * 1"  # retry for a run that took longer
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fill-costs
+  cancel-in-progress: false
+
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Fill cost and run time
+        env:
+          SITE_GITHUB_TOKEN: ${{ github.token }}
+          SITE_REPO: ${{ github.repository }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          LANGSMITH_PROJECT: throughline-prod
+        run: uv run python -m throughline.publish
