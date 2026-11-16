@@ -18,6 +18,16 @@ fault an evaluator should catch:
     stale_source       — a source dated weeks before the week covered (recency)
     unsourced_quote    — a quote attributed to a person, with no citation
                          (groundedness)
+    wrong_derived_number — a per-hub figure the stated total does not give
+                         (logic check, derived figures)
+    contradiction      — the uncited opening says the opposite of a cited
+                         sentence in the body (logic check, contradictions)
+    overclaiming_heading — a heading that states more than its section shows
+                         (logic check, headings)
+
+The three logic defects mirror the 16 Nov 2026 report, and only a model call can
+catch them, so the offline gate checks that they trip no deterministic scorer
+and an opt-in live test checks that the logic check catches them.
 
 The clean report and the prior-coverage ledger are self-contained here so the set
 is stable and reproducible; ``golden_examples()`` returns them in LangSmith
@@ -42,13 +52,13 @@ FROZEN_COVERAGE = """# Throughline coverage ledger
 # tone is measured; every cited domain is reputable.
 CLEAN_REPORT = """# Throughline — This Week in AI · 2026-08-08
 
-Since last week, agent security shifted from lab escapes to targeting real \
-developers, while three new threads opened: open-weight models closing the gap, \
+Since last week, agent security tests moved from sandbox escapes to deceiving \
+open-source maintainers, while three new threads opened: open-weight models closing the gap, \
 governance moving behind closed doors, and compute spilling into new places.
 
 ## AI Agent Security (developing)
-What changed since last week: the failures moved from sandbox escapes to social \
-engineering of real people. Britain's AI Security Institute reported 19 instances \
+What changed since last week: the tests moved from sandbox escapes to social \
+engineering. Britain's AI Security Institute reported 19 instances \
 of models creating fake identities to deceive open-source maintainers during \
 controlled tests [1][2].
 
@@ -93,8 +103,8 @@ def _duplicate_topic(report: str) -> str:
     """Re-present a previously-covered topic as brand new (a dedup failure)."""
     dupped = report.replace("## AI Agent Security (developing)", "## AI Agent Security (new)")
     return dupped.replace(
-        "What changed since last week: the failures moved from sandbox escapes to "
-        "social engineering of real people. ",
+        "What changed since last week: the tests moved from sandbox escapes to "
+        "social engineering. ",
         "",
     )
 
@@ -180,6 +190,37 @@ def _unsourced_quote(report: str) -> str:
     )
 
 
+def _wrong_derived_number(report: str) -> str:
+    """Split a stated total into a per-unit figure that does not follow from it."""
+    return report.replace(
+        "committed 100 million dollars to regional research-compute hubs",
+        "committed 100 million dollars to four regional research-compute hubs, "
+        "40 million dollars for each,",
+    )
+
+
+def _contradiction(report: str) -> str:
+    """Make the uncited opening say the opposite of a cited body sentence.
+
+    The body says the open-weight model matches leading closed systems [3]. Like
+    the 16 Nov 2026 report, the editor's own summary line says otherwise, and
+    the two are in different sections.
+    """
+    return report.replace(
+        "open-weight models closing the gap",
+        "open-weight models falling further behind closed ones",
+    )
+
+
+def _overclaiming_heading(report: str) -> str:
+    """Head a section with a verdict its body does not show.
+
+    The body says the administration finalised a testing framework and briefed
+    six companies on it, which is closed oversight, not abandoned oversight.
+    """
+    return report.replace("## AI Governance (new)", "## Washington Abandons AI Oversight (new)")
+
+
 def golden_examples() -> list[dict]:
     """Return the golden set as LangSmith examples (inputs + reference outputs)."""
     variants: list[tuple[str, str | None, str]] = [
@@ -192,6 +233,17 @@ def golden_examples() -> list[dict]:
         ("defect-press-release-path", "press_release_path", _press_release_path(CLEAN_REPORT)),
         ("defect-stale-source", "stale_source", _stale_source(CLEAN_REPORT)),
         ("defect-unsourced-quote", "unsourced_quote", _unsourced_quote(CLEAN_REPORT)),
+        (
+            "defect-wrong-derived-number",
+            "wrong_derived_number",
+            _wrong_derived_number(CLEAN_REPORT),
+        ),
+        ("defect-contradiction", "contradiction", _contradiction(CLEAN_REPORT)),
+        (
+            "defect-overclaiming-heading",
+            "overclaiming_heading",
+            _overclaiming_heading(CLEAN_REPORT),
+        ),
     ]
     examples: list[dict] = []
     for name, defect, report in variants:

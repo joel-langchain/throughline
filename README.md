@@ -125,6 +125,11 @@ then each kept topic is checked before it can reach the report:
   a silently wrong decision; an omitted verdict is now an error.
 - **Final-pass review** — a reviewer reads the assembled report end to end and
   `APPROVE`s or `REVISE`s for whole-report coherence, style, and governance.
+- **Logic check** — alongside the reviewer, a narrow judge does the arithmetic on
+  derived figures, sets the editor's uncited sentences against the cited ones,
+  and holds each heading against its section. It starts when the report is
+  written, so it overlaps the review, and each finding quotes the report and
+  turns the verdict into `REVISE`. See `src/throughline/logic_check.py`.
 - **Human-in-the-loop (opt-in)** — when the report trips a risk signal (sensitive
   terms, thin sourcing, or the editor's own uncertainty) it can pause for a human
   to approve / edit / reject. Off by default so unattended runs never block; clean
@@ -189,7 +194,8 @@ Using what happens in real runs to make the system better over time.
   **reference-free evaluators** (citation integrity, source quality, press
   releases cited by URL path, source recency, groundedness, dedup, editorial
   voice). Because they read only the report, the same evaluators grade the golden
-  set offline *and* live traces online.
+  set offline *and* live traces online. Three model-based scorers (derived
+  figures, contradictions, headings) run the logic check one kind at a time.
 - **CI gate** — a GitHub Actions workflow runs the golden set through those
   evaluators on every push and PR, offline (no LangSmith, no secrets). It fails the
   build if an evaluator stops catching its planted defect or starts firing on the
@@ -256,9 +262,12 @@ uv run ruff check .  # lint
 The golden-eval gate (`tests/test_golden_evals.py`) asserts the clean report
 passes every evaluator while each planted defect is caught by exactly its target
 evaluator — no LangSmith, no API keys. The same suite runs in CI
-(`.github/workflows/ci.yml`). The richer LangSmith-tracked experiment
-(`uv run python -m evals.run_evals`) still exists for history and the LLM voice
-judge.
+(`.github/workflows/ci.yml`). The three logic defects need a model to catch
+them, so offline the gate only checks that no deterministic scorer fires on
+them; `THROUGHLINE_LIVE_EVALS=1 uv run pytest -k live` holds the logic scorers
+to the full contract with real calls. The richer LangSmith-tracked experiment
+(`uv run python -m evals.run_evals`, add `--with-judge` for the model scorers)
+still exists for history.
 
 The rest of the suite covers the parts that only fail in production: search
 resilience, the verbatim source archive, the typed subagent contracts, Slack
