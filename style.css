@@ -522,7 +522,7 @@ button.topic-link:hover { background: var(--wash); color: var(--link); }
 .plot { position: relative; }
 .plot svg { display: block; width: 100%; overflow: visible; }
 .plot svg text { font: 11px "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--muted); }
-.plot svg text.direct { fill: var(--ink-2); font-weight: 600; }
+.plot svg text.direct { fill: var(--ink-2); font-weight: 600; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
 /* bars grow and lines draw the first time the charts come into view */
 html.motion .charts.pre .plot svg .mark,
 html.motion .charts.pre .plot svg .line,

@@ -45,7 +45,9 @@
         "groundedness": 0.905,
         "citation_integrity": 1.0,
         "voice": 1.0,
-        "dedup": 1.0
+        "dedup": 1.0,
+        "press_release_path": 0.0,
+        "source_recency": 0.758
       },
       "trace_id": "01a1e2ba-03c1-7191-b73c-6574eafdf3ce",
       "cost_usd": null,
@@ -94,7 +96,9 @@
         "topic_count": 5.0,
         "topics_kept": 7.0,
         "verification_flags": 5.0,
-        "voice": 1.0
+        "voice": 1.0,
+        "press_release_path": 1.0,
+        "source_recency": 1.0
       },
       "trace_id": "01a1bead-7db4-7c62-9647-087f4c80a4f7",
       "cost_usd": 8.52,
@@ -148,7 +152,9 @@
         "topic_count": 5.0,
         "topics_kept": 8.0,
         "verification_flags": 6.0,
-        "voice": 1.0
+        "voice": 1.0,
+        "press_release_path": 1.0,
+        "source_recency": 0.947
       },
       "trace_id": "01a19aa0-f27a-7e52-ac18-967557a831fa",
       "cost_usd": 5.9,
@@ -202,7 +208,9 @@
         "topic_count": 5.0,
         "topics_kept": 7.0,
         "verification_flags": 4.0,
-        "voice": 1.0
+        "voice": 1.0,
+        "press_release_path": 1.0,
+        "source_recency": 0.611
       },
       "trace_id": "01a17694-78fa-7512-8d1a-93074fc86190",
       "cost_usd": 9.17,
@@ -252,7 +260,9 @@
         "topic_count": 4.0,
         "topics_kept": 4.0,
         "verification_flags": 3.0,
-        "voice": 1.0
+        "voice": 1.0,
+        "press_release_path": 1.0,
+        "source_recency": 1.0
       },
       "trace_id": "01a158ba-5ce4-77f0-ac08-7714b3c9da40",
       "cost_usd": 5.2,
@@ -357,7 +367,9 @@
         "topic_count": 5.0,
         "topics_kept": 5.0,
         "verification_flags": 3.0,
-        "voice": 1.0
+        "voice": 1.0,
+        "press_release_path": 1.0,
+        "source_recency": 1.0
       },
       "trace_id": "01a10ac1-8110-7ba0-9450-a783f959d3de",
       "cost_usd": 42.64,
@@ -427,7 +439,8 @@
         "topic_count": 4.0,
         "topics_kept": 7.0,
         "verification_flags": 6.0,
-        "voice": 1.0
+        "voice": 1.0,
+        "press_release_path": 1.0
       },
       "trace_id": "01a0ca06-06c9-7441-8f23-3e548946a019",
       "cost_usd": 6.21,
@@ -477,7 +490,9 @@
         "topic_count": 4.0,
         "topics_kept": 5.0,
         "verification_flags": 3.0,
-        "voice": 1.0
+        "voice": 1.0,
+        "press_release_path": 1.0,
+        "source_recency": 1.0
       },
       "trace_id": "01a0c255-dc95-7b22-bda0-464e1eefe85d",
       "cost_usd": 21.55,
@@ -526,7 +541,8 @@
         "topic_count": 5.0,
         "topics_kept": 8.0,
         "verification_flags": 4.0,
-        "voice": 1.0
+        "voice": 1.0,
+        "press_release_path": 1.0
       },
       "trace_id": "01a09e6f-75be-72b3-96a6-2462687d4f35",
       "cost_usd": 16.89,

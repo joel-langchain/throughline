@@ -40,7 +40,9 @@
     "topic_count": 5.0,
     "topics_kept": 7.0,
     "verification_flags": 4.0,
-    "voice": 1.0
+    "voice": 1.0,
+    "press_release_path": 1.0,
+    "source_recency": 0.611
   },
   "trace_id": "01a17694-78fa-7512-8d1a-93074fc86190",
   "cost_usd": 9.17,

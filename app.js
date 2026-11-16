@@ -225,6 +225,10 @@ function factsOf(run) {
     rows.push(["Topics", h("span", {}, String(run.topics.length),
       h("span", { class: "fact-sub" }, `${fresh} new, ${developing} developing`))]);
     rows.push(["Sources cited", fmt.int(score(run, "source_count"))]);
+    const recency = score(run, "source_recency");
+    if (recency != null) rows.push(["Sources dated this week", fmt.pct(recency)]);
+    const press = score(run, "press_release_path");
+    if (press != null) rows.push(["Press release cited", press === 0 ? "Yes" : "No"]);
   }
   rows.push(["Run time", later(run.duration_minutes, fmt.min)]);
   rows.push(["Model cost", later(run.cost_usd, fmt.usd)]);
@@ -663,12 +667,15 @@ function renderCharts() {
   stackedCost(root);
   lineChart(root, {
     title: "Source quality",
-    sub: "Share of cited sites on the trusted list, and of claims with a primary source or two independent ones",
+    sub: "Share of cited sites on the trusted list, of claims with a primary source or two independent ones, " +
+      "and of sources dated inside the report's week. Weeks before 23 Nov had their dates scored afterwards.",
     series: [
       { label: "Cited sites on the trusted list", short: "trusted sites", color: css("--series-1"),
         value: (r) => (r.published ? score(r, "source_quality") : null) },
       { label: "Claims corroborated", short: "claims corroborated", color: css("--series-2"),
         value: (r) => (r.published ? score(r, "claims_corroborated") : null) },
+      { label: "Sources dated this week", short: "dated this week", color: css("--series-3"),
+        value: (r) => (r.published ? score(r, "source_recency") : null) },
     ],
   });
   columnChart(root, {
@@ -685,7 +692,8 @@ function renderCharts() {
 // --- table view ------------------------------------------------------------------
 
 function renderTable() {
-  const head = ["Week", "Status", "Topics", "Sources", "Trusted sites", "Claims corroborated", "Cost",
+  const head = ["Week", "Status", "Topics", "Sources", "Trusted sites", "Claims corroborated",
+    "Dated this week", "Press release cited", "Cost",
     ...STAGES.map(([, label]) => label), "Run time"];
   const rows = [...state.runs].reverse().map((r) => [
     shortDate(r.date),
@@ -694,6 +702,8 @@ function renderTable() {
     r.published ? fmt.int(score(r, "source_count")) : "–",
     r.published ? fmt.pct(score(r, "source_quality")) : "–",
     r.published ? fmt.pct(score(r, "claims_corroborated")) : "–",
+    r.published ? fmt.pct(score(r, "source_recency")) : "–",
+    r.published && score(r, "press_release_path") != null ? (score(r, "press_release_path") === 0 ? "Yes" : "No") : "–",
     fmt.usd(r.cost_usd),
     ...STAGES.map(([k]) => {
       const split = stageSplit(r);
