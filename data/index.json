@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-23T05:18:37+00:00",
+  "updated": "2026-11-23T19:10:21+00:00",
   "runs": [
     {
       "date": "2026-11-23",
@@ -46,9 +46,14 @@
         "dedup": 1.0
       },
       "trace_id": "01a206c6-7b85-7fc2-aeb1-67b7a9817f52",
-      "cost_usd": null,
-      "cost_by_stage": null,
-      "duration_minutes": null
+      "cost_usd": 4.78,
+      "cost_by_stage": {
+        "topic-researcher": 0.41,
+        "editor": 0.85,
+        "citation-verifier": 3.47,
+        "final-pass-reviewer": 0.05
+      },
+      "duration_minutes": 18.7
     },
     {
       "date": "2026-11-16",
