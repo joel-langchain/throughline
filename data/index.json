@@ -1,6 +1,55 @@
 {
-  "updated": "2026-11-16T10:23:39+00:00",
+  "updated": "2026-11-23T05:18:37+00:00",
   "runs": [
+    {
+      "date": "2026-11-23",
+      "title": "Throughline — This Week in AI · 2026-11-23",
+      "published": true,
+      "held_reason": null,
+      "topics": [
+        {
+          "name": "Anthropic's IPO Lands — and So Do the Doubts",
+          "status": "developing"
+        },
+        {
+          "name": "AI Is Not Hiring Juniors",
+          "status": "new"
+        },
+        {
+          "name": "AI and the Brain Are Not the Same Thing",
+          "status": "new"
+        },
+        {
+          "name": "Congress Sets Its AI Agenda — Against a White House Headwind",
+          "status": "developing"
+        }
+      ],
+      "scores": {
+        "report_produced": 1.0,
+        "topic_count": 4.0,
+        "source_count": 16.0,
+        "search_available": 1.0,
+        "source_archive_ok": 1.0,
+        "search_failures": 0.0,
+        "subagent_failures": 0.0,
+        "topics_kept": 6.0,
+        "verification_flags": 3.0,
+        "final_pass_revisions": 3.0,
+        "claims_corroborated": 0.724,
+        "delivery_ok": 1.0,
+        "source_quality": 0.533,
+        "press_release_path": 1.0,
+        "source_recency": 1.0,
+        "groundedness": 1.0,
+        "citation_integrity": 1.0,
+        "voice": 1.0,
+        "dedup": 1.0
+      },
+      "trace_id": "01a206c6-7b85-7fc2-aeb1-67b7a9817f52",
+      "cost_usd": null,
+      "cost_by_stage": null,
+      "duration_minutes": null
+    },
     {
       "date": "2026-11-16",
       "title": "Throughline — This Week in AI · 2026-11-16",
